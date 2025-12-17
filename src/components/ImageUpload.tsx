@@ -3,6 +3,7 @@
 /**
  * 图片上传组件
  * 支持拖拽上传和点击选择文件
+ * 支持多张图片同时上传
  */
 
 import { useCallback, useRef, useState } from "react";
@@ -11,59 +12,113 @@ import { useAppStore } from "@/lib/store";
 // 支持的图片类型
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+const MAX_FILES = 20; // 最多同时上传 20 张
 
 export function ImageUpload() {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { setOriginalImage, setLoading, setError, isLoading } = useAppStore();
+  const { addImages, setLoading, setError, isLoading, images } = useAppStore();
 
   /**
-   * 处理文件
+   * 处理单个文件
    */
-  const handleFile = useCallback(
-    async (file: File) => {
-      // 验证文件类型
-      if (!ACCEPTED_TYPES.includes(file.type)) {
-        setError("不支持的文件格式，请上传 JPG、PNG 或 WebP 图片");
+  const processFile = async (
+    file: File,
+  ): Promise<{
+    dataUrl: string;
+    size: { width: number; height: number };
+  } | null> => {
+    // 验证文件类型
+    if (!ACCEPTED_TYPES.includes(file.type)) {
+      return null;
+    }
+
+    // 验证文件大小
+    if (file.size > MAX_FILE_SIZE) {
+      return null;
+    }
+
+    // 读取文件为 Data URL
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error("读取文件失败"));
+      reader.readAsDataURL(file);
+    });
+
+    // 获取图片尺寸
+    const size = await new Promise<{ width: number; height: number }>(
+      (resolve, reject) => {
+        const img = new Image();
+        img.onload = () =>
+          resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        img.onerror = () => reject(new Error("加载图片失败"));
+        img.src = dataUrl;
+      },
+    );
+
+    return { dataUrl, size };
+  };
+
+  /**
+   * 处理多个文件
+   */
+  const handleFiles = useCallback(
+    async (files: FileList) => {
+      const fileArray = Array.from(files).slice(0, MAX_FILES - images.length);
+
+      if (fileArray.length === 0) {
+        setError(`已达到最大图片数量限制（${MAX_FILES}张）`);
         return;
       }
 
-      // 验证文件大小
-      if (file.size > MAX_FILE_SIZE) {
-        setError("文件过大，请上传 20MB 以内的图片");
+      // 过滤有效文件
+      const validFiles = fileArray.filter(
+        (file) =>
+          ACCEPTED_TYPES.includes(file.type) && file.size <= MAX_FILE_SIZE,
+      );
+
+      if (validFiles.length === 0) {
+        setError(
+          "没有有效的图片文件，请上传 JPG、PNG 或 WebP 格式（20MB以内）",
+        );
         return;
       }
 
-      setLoading(true, "正在加载图片...");
+      if (validFiles.length < fileArray.length) {
+        const skipped = fileArray.length - validFiles.length;
+        console.warn(`跳过了 ${skipped} 个无效文件`);
+      }
+
+      setLoading(true, `正在加载 ${validFiles.length} 张图片...`);
 
       try {
-        // 读取文件为 Data URL
-        const dataUrl = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = () => reject(new Error("读取文件失败"));
-          reader.readAsDataURL(file);
-        });
-
-        // 获取图片尺寸
-        const size = await new Promise<{ width: number; height: number }>(
-          (resolve, reject) => {
-            const img = new Image();
-            img.onload = () =>
-              resolve({ width: img.naturalWidth, height: img.naturalHeight });
-            img.onerror = () => reject(new Error("加载图片失败"));
-            img.src = dataUrl;
-          },
+        const results = await Promise.all(
+          validFiles.map((file) => processFile(file).catch(() => null)),
         );
 
-        setOriginalImage(dataUrl, size);
+        const successfulResults = results.filter(
+          (
+            r,
+          ): r is {
+            dataUrl: string;
+            size: { width: number; height: number };
+          } => r !== null,
+        );
+
+        if (successfulResults.length === 0) {
+          setError("处理图片失败，请重试");
+          return;
+        }
+
+        addImages(successfulResults);
       } catch (err) {
         setError(err instanceof Error ? err.message : "处理图片失败");
       } finally {
         setLoading(false);
       }
     },
-    [setOriginalImage, setLoading, setError],
+    [addImages, setLoading, setError, images.length],
   );
 
   /**
@@ -84,12 +139,12 @@ export function ImageUpload() {
       e.preventDefault();
       setIsDragging(false);
 
-      const file = e.dataTransfer.files[0];
-      if (file) {
-        handleFile(file);
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        handleFiles(files);
       }
     },
-    [handleFile],
+    [handleFiles],
   );
 
   /**
@@ -101,14 +156,14 @@ export function ImageUpload() {
 
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        handleFile(file);
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        handleFiles(files);
       }
       // 重置 input，允许选择同一文件
       e.target.value = "";
     },
-    [handleFile],
+    [handleFiles],
   );
 
   return (
@@ -157,7 +212,10 @@ export function ImageUpload() {
                 点击或拖拽上传图片
               </p>
               <p className="text-sm text-gray-500 mt-1">
-                支持 JPG、PNG、WebP 格式
+                支持 JPG、PNG、WebP 格式，可多选
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                最多 {MAX_FILES} 张，每张不超过 20MB
               </p>
             </div>
           </>
@@ -168,6 +226,7 @@ export function ImageUpload() {
         ref={fileInputRef}
         type="file"
         accept={ACCEPTED_TYPES.join(",")}
+        multiple
         onChange={handleFileChange}
         className="hidden"
       />

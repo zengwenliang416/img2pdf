@@ -3,15 +3,15 @@
 /**
  * 四点拖拽编辑器
  * 用于调整文档边界的四个角点
+ * 支持多图片导航和输出尺寸调整
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import {
-  ensureOpenCV,
-  detectDocumentEdges,
   getDefaultCorners,
   applyPerspectiveTransform,
+  calculateOutputSize,
   type Corners,
   type Point,
 } from "@/lib/opencv";
@@ -26,20 +26,26 @@ export function CornerEditor() {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
-  const isDetectingRef = useRef(false); // 防止重复执行边缘检测
+  const isDetectingRef = useRef(false);
 
   const {
-    originalImage,
-    imageSize,
-    corners,
+    images,
+    currentIndex,
+    setCurrentIndex,
     setCorners,
     setCroppedImage,
+    setOutputSize,
     setLoading,
     setError,
     goBack,
+    finishCrop,
+    removeImage,
     isLoading,
     loadingMessage,
   } = useAppStore();
+
+  // 当前图片
+  const currentImage = images[currentIndex];
 
   // 显示尺寸和缩放比例
   const [displaySize, setDisplaySize] = useState({ width: 0, height: 0 });
@@ -48,11 +54,18 @@ export function CornerEditor() {
   // 当前拖拽的角点索引
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 
+  // 输出尺寸调整
+  const [showSizeEditor, setShowSizeEditor] = useState(false);
+  const [customWidth, setCustomWidth] = useState<number>(0);
+  const [customHeight, setCustomHeight] = useState<number>(0);
+  const [keepAspectRatio, setKeepAspectRatio] = useState(true);
+  const originalAspectRatio = useRef<number>(1);
+
   /**
    * 计算显示尺寸
    */
   useEffect(() => {
-    if (!imageSize || !containerRef.current) return;
+    if (!currentImage?.size || !containerRef.current) return;
 
     const containerWidth = Math.min(
       containerRef.current.clientWidth - 32,
@@ -60,95 +73,95 @@ export function CornerEditor() {
     );
     const maxWidth = Math.max(containerWidth, MIN_DISPLAY_WIDTH);
 
-    const aspectRatio = imageSize.width / imageSize.height;
-    let width = Math.min(maxWidth, imageSize.width);
+    const aspectRatio = currentImage.size.width / currentImage.size.height;
+    let width = Math.min(maxWidth, currentImage.size.width);
     let height = width / aspectRatio;
 
     // 如果高度太大，按高度限制
-    const maxHeight = window.innerHeight * 0.6;
+    const maxHeight = window.innerHeight * 0.5;
     if (height > maxHeight) {
       height = maxHeight;
       width = height * aspectRatio;
     }
 
     setDisplaySize({ width, height });
-    setScale(width / imageSize.width);
-  }, [imageSize]);
+    setScale(width / currentImage.size.width);
+  }, [currentImage?.size]);
 
   /**
-   * 加载图片并检测边缘
+   * 加载图片并设置默认角点
    */
   useEffect(() => {
-    console.log(
-      "[CornerEditor] useEffect 触发, originalImage:",
-      !!originalImage,
-      "imageSize:",
-      !!imageSize,
-      "isDetecting:",
-      isDetectingRef.current,
-    );
-    if (!originalImage || !imageSize) return;
+    if (!currentImage) return;
 
     // 防止 React StrictMode 下的重复执行
+    const imageId = currentImage.id;
     if (isDetectingRef.current) {
-      console.log("[CornerEditor] 跳过重复执行");
       return;
     }
     isDetectingRef.current = true;
 
-    const loadAndDetect = async () => {
-      console.log("[CornerEditor] 开始 loadAndDetect");
-      setLoading(true, "正在加载 OpenCV...");
+    const loadImage = async () => {
+      setLoading(true, "正在加载图片...");
 
       try {
-        // 先加载图片，不需要等 OpenCV
-        console.log("[CornerEditor] 开始加载图片...");
         const img = new Image();
         await new Promise<void>((resolve, reject) => {
-          img.onload = () => {
-            console.log(
-              "[CornerEditor] 图片加载成功:",
-              img.width,
-              "x",
-              img.height,
-            );
-            resolve();
-          };
+          img.onload = () => resolve();
           img.onerror = () => reject(new Error("加载图片失败"));
-          img.src = originalImage;
+          img.src = currentImage.original;
         });
         imageRef.current = img;
-        console.log("[CornerEditor] 图片已存储到 imageRef");
 
-        // 暂时跳过边缘检测，直接使用默认角点
-        // TODO: 修复 OpenCV 阻塞问题后恢复边缘检测
-        console.log("[CornerEditor] 使用默认角点（暂时跳过边缘检测）");
-        const defaultCorners = getDefaultCorners(
-          imageSize.width,
-          imageSize.height,
-          Math.min(imageSize.width, imageSize.height) * 0.05,
-        );
-        setCorners(defaultCorners);
-        console.log("[CornerEditor] 角点已设置:", defaultCorners);
-      } catch (err) {
-        console.error("边缘检测失败:", err);
-        setError(err instanceof Error ? err.message : "边缘检测失败");
-
-        // 设置默认角点
-        if (imageSize) {
+        // 如果没有角点，使用默认角点
+        if (!currentImage.corners) {
           const defaultCorners = getDefaultCorners(
-            imageSize.width,
-            imageSize.height,
+            currentImage.size.width,
+            currentImage.size.height,
+            Math.min(currentImage.size.width, currentImage.size.height) * 0.05,
+          );
+          setCorners(defaultCorners);
+        }
+
+        // 初始化输出尺寸
+        if (currentImage.corners) {
+          const size = calculateOutputSize(currentImage.corners);
+          setCustomWidth(size.width);
+          setCustomHeight(size.height);
+          originalAspectRatio.current = size.width / size.height;
+        }
+      } catch (err) {
+        console.error("加载图片失败:", err);
+        setError(err instanceof Error ? err.message : "加载图片失败");
+
+        if (currentImage.size) {
+          const defaultCorners = getDefaultCorners(
+            currentImage.size.width,
+            currentImage.size.height,
           );
           setCorners(defaultCorners);
         }
       } finally {
         setLoading(false);
+        isDetectingRef.current = false;
       }
     };
 
-    loadAndDetect();
-  }, [originalImage, imageSize, setCorners, setLoading, setError]);
+    loadImage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentImage?.id]);
+
+  /**
+   * 当角点变化时更新输出尺寸
+   */
+  useEffect(() => {
+    if (currentImage?.corners) {
+      const size = calculateOutputSize(currentImage.corners);
+      setCustomWidth(size.width);
+      setCustomHeight(size.height);
+      originalAspectRatio.current = size.width / size.height;
+    }
+  }, [currentImage?.corners]);
 
   /**
    * 绘制预览
@@ -156,23 +169,22 @@ export function CornerEditor() {
   const drawPreview = useCallback(() => {
     const canvas = canvasRef.current;
     const img = imageRef.current;
+    const corners = currentImage?.corners;
     if (!canvas || !img || !corners || displaySize.width === 0) return;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // 设置 Canvas 尺寸
     canvas.width = displaySize.width;
     canvas.height = displaySize.height;
 
-    // 绘制图片
     ctx.drawImage(img, 0, 0, displaySize.width, displaySize.height);
 
     // 绘制半透明遮罩
     ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
     ctx.fillRect(0, 0, displaySize.width, displaySize.height);
 
-    // 绘制选中区域（裁掉遮罩）
+    // 绘制选中区域
     const scaledCorners = corners.map((p) => ({
       x: p.x * scale,
       y: p.y * scale,
@@ -187,7 +199,6 @@ export function CornerEditor() {
     ctx.closePath();
     ctx.clip();
 
-    // 重新绘制图片（选中区域）
     ctx.drawImage(img, 0, 0, displaySize.width, displaySize.height);
     ctx.restore();
 
@@ -201,14 +212,14 @@ export function CornerEditor() {
     }
     ctx.closePath();
     ctx.stroke();
-  }, [corners, displaySize, scale]);
+  }, [currentImage?.corners, displaySize, scale]);
 
   useEffect(() => {
     drawPreview();
   }, [drawPreview]);
 
   /**
-   * 获取触摸/鼠标位置（相对于 Canvas）
+   * 获取触摸/鼠标位置
    */
   const getPosition = useCallback(
     (e: React.MouseEvent | React.TouchEvent): Point => {
@@ -234,9 +245,6 @@ export function CornerEditor() {
     [scale],
   );
 
-  /**
-   * 开始拖拽
-   */
   const handleDragStart = useCallback(
     (index: number) => (e: React.MouseEvent | React.TouchEvent) => {
       e.preventDefault();
@@ -245,29 +253,32 @@ export function CornerEditor() {
     [],
   );
 
-  /**
-   * 拖拽中
-   */
   const handleDrag = useCallback(
     (e: React.MouseEvent | React.TouchEvent) => {
-      if (draggingIndex === null || !corners || !imageSize) return;
+      if (
+        draggingIndex === null ||
+        !currentImage?.corners ||
+        !currentImage.size
+      )
+        return;
 
       const pos = getPosition(e);
+      const clampedX = Math.max(0, Math.min(currentImage.size.width, pos.x));
+      const clampedY = Math.max(0, Math.min(currentImage.size.height, pos.y));
 
-      // 限制在图像范围内
-      const clampedX = Math.max(0, Math.min(imageSize.width, pos.x));
-      const clampedY = Math.max(0, Math.min(imageSize.height, pos.y));
-
-      const newCorners = [...corners] as Corners;
+      const newCorners = [...currentImage.corners] as Corners;
       newCorners[draggingIndex] = { x: clampedX, y: clampedY };
       setCorners(newCorners);
     },
-    [draggingIndex, corners, imageSize, getPosition, setCorners],
+    [
+      draggingIndex,
+      currentImage?.corners,
+      currentImage?.size,
+      getPosition,
+      setCorners,
+    ],
   );
 
-  /**
-   * 结束拖拽
-   */
   const handleDragEnd = useCallback(() => {
     setDraggingIndex(null);
   }, []);
@@ -276,12 +287,11 @@ export function CornerEditor() {
    * 确认裁剪
    */
   const handleConfirm = useCallback(async () => {
-    if (!corners || !imageRef.current) return;
+    if (!currentImage?.corners || !imageRef.current) return;
 
     setLoading(true, "正在处理图片...");
 
     try {
-      // 创建临时 Canvas
       const tempCanvas = document.createElement("canvas");
       tempCanvas.width = imageRef.current.naturalWidth;
       tempCanvas.height = imageRef.current.naturalHeight;
@@ -289,35 +299,95 @@ export function CornerEditor() {
       if (!ctx) throw new Error("无法创建 Canvas 上下文");
       ctx.drawImage(imageRef.current, 0, 0);
 
-      // 执行透视变换
+      // 使用自定义输出尺寸
+      const outputSize =
+        customWidth > 0 && customHeight > 0
+          ? { width: customWidth, height: customHeight }
+          : undefined;
+
       const croppedDataUrl = await applyPerspectiveTransform(
         tempCanvas,
-        corners,
+        currentImage.corners,
+        outputSize,
       );
 
       setCroppedImage(croppedDataUrl);
+      if (outputSize) {
+        setOutputSize(outputSize);
+      }
+
+      // 重置检测标志，准备处理下一张
+      isDetectingRef.current = false;
+
+      // 进入下一张或滤镜步骤
+      finishCrop();
     } catch (err) {
       console.error("透视变换失败:", err);
       setError(err instanceof Error ? err.message : "图片处理失败");
     } finally {
       setLoading(false);
     }
-  }, [corners, setCroppedImage, setLoading, setError]);
+  }, [
+    currentImage?.corners,
+    customWidth,
+    customHeight,
+    setCroppedImage,
+    setOutputSize,
+    setLoading,
+    setError,
+    finishCrop,
+  ]);
 
   /**
    * 重置角点
    */
   const handleReset = useCallback(() => {
-    if (!imageSize) return;
-    const defaultCorners = getDefaultCorners(imageSize.width, imageSize.height);
+    if (!currentImage?.size) return;
+    const defaultCorners = getDefaultCorners(
+      currentImage.size.width,
+      currentImage.size.height,
+    );
     setCorners(defaultCorners);
-  }, [imageSize, setCorners]);
+  }, [currentImage?.size, setCorners]);
 
-  if (!originalImage || !imageSize) {
+  /**
+   * 处理宽度变化
+   */
+  const handleWidthChange = useCallback(
+    (value: number) => {
+      setCustomWidth(value);
+      if (keepAspectRatio && originalAspectRatio.current) {
+        setCustomHeight(Math.round(value / originalAspectRatio.current));
+      }
+    },
+    [keepAspectRatio],
+  );
+
+  /**
+   * 处理高度变化
+   */
+  const handleHeightChange = useCallback(
+    (value: number) => {
+      setCustomHeight(value);
+      if (keepAspectRatio && originalAspectRatio.current) {
+        setCustomWidth(Math.round(value * originalAspectRatio.current));
+      }
+    },
+    [keepAspectRatio],
+  );
+
+  /**
+   * 删除当前图片
+   */
+  const handleRemove = useCallback(() => {
+    removeImage(currentIndex);
+  }, [removeImage, currentIndex]);
+
+  if (!currentImage) {
     return null;
   }
 
-  const scaledCorners = corners?.map((p) => ({
+  const scaledCorners = currentImage.corners?.map((p) => ({
     x: p.x * scale,
     y: p.y * scale,
   }));
@@ -327,11 +397,63 @@ export function CornerEditor() {
       ref={containerRef}
       className="flex flex-col items-center gap-4 p-4 w-full"
     >
-      {/* 标题 */}
+      {/* 标题和图片导航 */}
       <div className="text-center">
         <h2 className="text-lg font-semibold text-gray-800">调整文档边界</h2>
         <p className="text-sm text-gray-500">拖动四角调整裁剪区域</p>
+        {images.length > 1 && (
+          <p className="text-sm text-blue-600 mt-1">
+            第 {currentIndex + 1} / {images.length} 张
+          </p>
+        )}
       </div>
+
+      {/* 多图缩略图导航 */}
+      {images.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto py-2 px-1 max-w-full">
+          {images.map((img, index) => (
+            <button
+              key={img.id}
+              onClick={() => {
+                isDetectingRef.current = false;
+                setCurrentIndex(index);
+              }}
+              className={`
+                relative flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden border-2
+                ${
+                  index === currentIndex
+                    ? "border-blue-500 ring-2 ring-blue-200"
+                    : "border-gray-200 hover:border-gray-400"
+                }
+                ${img.cropped ? "opacity-50" : ""}
+              `}
+            >
+              <img
+                src={img.original}
+                alt={`图片 ${index + 1}`}
+                className="w-full h-full object-cover"
+              />
+              {img.cropped && (
+                <div className="absolute inset-0 bg-green-500/30 flex items-center justify-center">
+                  <svg
+                    className="w-6 h-6 text-green-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={3}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* 编辑区域 */}
       <div
@@ -343,7 +465,6 @@ export function CornerEditor() {
         onTouchMove={handleDrag}
         onTouchEnd={handleDragEnd}
       >
-        {/* Canvas */}
         <canvas ref={canvasRef} className="rounded-lg shadow-lg" />
 
         {/* 角点手柄 */}
@@ -375,8 +496,100 @@ export function CornerEditor() {
         )}
       </div>
 
+      {/* 输出尺寸调整 */}
+      <div className="w-full max-w-md">
+        <button
+          onClick={() => setShowSizeEditor(!showSizeEditor)}
+          className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600"
+        >
+          <svg
+            className={`w-4 h-4 transition-transform ${showSizeEditor ? "rotate-90" : ""}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9 5l7 7-7 7"
+            />
+          </svg>
+          调整输出尺寸
+        </button>
+
+        {showSizeEditor && (
+          <div className="mt-3 p-3 bg-gray-50 rounded-lg space-y-3">
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={keepAspectRatio}
+                  onChange={(e) => setKeepAspectRatio(e.target.checked)}
+                  className="rounded text-blue-500"
+                />
+                <span className="text-sm text-gray-600">保持比例</span>
+              </label>
+            </div>
+
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 mb-1">
+                  宽度 (px)
+                </label>
+                <input
+                  type="number"
+                  value={customWidth}
+                  onChange={(e) =>
+                    handleWidthChange(parseInt(e.target.value) || 0)
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  min={1}
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 mb-1">
+                  高度 (px)
+                </label>
+                <input
+                  type="number"
+                  value={customHeight}
+                  onChange={(e) =>
+                    handleHeightChange(parseInt(e.target.value) || 0)
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  min={1}
+                />
+              </div>
+            </div>
+
+            {/* 预设尺寸 */}
+            <div className="flex gap-2 flex-wrap">
+              {[
+                { label: "A4", w: 2480, h: 3508 },
+                { label: "A5", w: 1748, h: 2480 },
+                { label: "1080p", w: 1920, h: 1080 },
+                { label: "4K", w: 3840, h: 2160 },
+              ].map((preset) => (
+                <button
+                  key={preset.label}
+                  onClick={() => {
+                    setCustomWidth(preset.w);
+                    setCustomHeight(preset.h);
+                    originalAspectRatio.current = preset.w / preset.h;
+                  }}
+                  className="px-2 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-100"
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* 操作按钮 */}
-      <div className="flex gap-3">
+      <div className="flex gap-3 flex-wrap justify-center">
         <button
           onClick={goBack}
           disabled={isLoading}
@@ -391,12 +604,21 @@ export function CornerEditor() {
         >
           重置
         </button>
+        {images.length > 1 && (
+          <button
+            onClick={handleRemove}
+            disabled={isLoading}
+            className="px-4 py-2 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50"
+          >
+            删除
+          </button>
+        )}
         <button
           onClick={handleConfirm}
-          disabled={isLoading || !corners}
+          disabled={isLoading || !currentImage.corners}
           className="px-6 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50"
         >
-          确认裁剪
+          {currentIndex < images.length - 1 ? "下一张" : "确认裁剪"}
         </button>
       </div>
     </div>
