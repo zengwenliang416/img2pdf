@@ -1,13 +1,13 @@
 "use client";
 
 /**
- * 滤镜选择面板
- * 预览和选择不同的图像滤镜
- * 支持多图片处理和导出
+ * 滤镜选择面板 v2
+ * 支持每页独立滤镜选择
+ * 支持批量应用滤镜到所有页面
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAppStore } from "@/lib/store";
+import { useAppStore, PAPER_SIZES } from "@/lib/store";
 import {
   applyFilter,
   AVAILABLE_FILTERS,
@@ -15,15 +15,21 @@ import {
   type FilterType,
 } from "@/lib/opencv";
 import { exportToPdf, exportToJpg, downloadBlob } from "@/lib/utils/exportPdf";
+import { ProgressOverlay } from "./ProgressOverlay";
+import { PageStrip } from "./PageStrip";
+import { ExportSettingsModal } from "./ExportSettingsModal";
 
 // 预览图最大宽度
 const PREVIEW_MAX_WIDTH = 400;
 
 export function FilterPanel() {
+  // 存储加载的图片元素
   const imagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  // 每张图片应用滤镜后的预览 URL
   const [previewUrls, setPreviewUrls] = useState<Map<string, string>>(
     new Map(),
   );
+  // 滤镜效果缩略图（用当前图生成）
   const [filterPreviews, setFilterPreviews] = useState<
     Record<FilterType, string>
   >({} as Record<FilterType, string>);
@@ -32,29 +38,28 @@ export function FilterPanel() {
   const {
     images,
     currentIndex,
-    setCurrentIndex,
-    selectedFilter,
-    setSelectedFilter,
+    updateImageById,
     setFilteredImage,
     setLoading,
+    setLoadingProgress,
     setError,
     goBack,
     isLoading,
-    loadingMessage,
-    getProcessedImages,
+    exportSettings,
+    setExportSettingsOpen,
   } = useAppStore();
 
   // 当前图片
   const currentImage = images[currentIndex];
 
   /**
-   * 加载所有图片并生成滤镜预览
+   * 加载所有图片
    */
   useEffect(() => {
     if (images.length === 0) return;
 
     const loadImages = async () => {
-      setLoading(true, "正在生成预览...");
+      setLoading(true, "正在加载图片...");
 
       try {
         // 加载所有裁剪后的图片
@@ -70,37 +75,11 @@ export function FilterPanel() {
           }
         }
 
-        // 用第一张图生成滤镜预览缩略图
-        const firstImage = imagesRef.current.get(images[0]?.id);
-        if (firstImage) {
-          const aspectRatio = firstImage.width / firstImage.height;
-          const thumbWidth = Math.min(100, firstImage.width);
-          const thumbHeight = thumbWidth / aspectRatio;
-
-          const thumbCanvas = document.createElement("canvas");
-          thumbCanvas.width = thumbWidth;
-          thumbCanvas.height = thumbHeight;
-          const thumbCtx = thumbCanvas.getContext("2d");
-          if (!thumbCtx) throw new Error("无法创建 Canvas 上下文");
-          thumbCtx.drawImage(firstImage, 0, 0, thumbWidth, thumbHeight);
-
-          const previews: Record<FilterType, string> = {} as Record<
-            FilterType,
-            string
-          >;
-
-          for (const filter of AVAILABLE_FILTERS) {
-            previews[filter] = await applyFilter(thumbCanvas, filter);
-          }
-
-          setFilterPreviews(previews);
-        }
-
-        // 应用默认滤镜到所有图片
-        await applyFilterToAll(selectedFilter);
+        // 初始化：为每张图片应用其各自的滤镜
+        await applyAllFilters();
       } catch (err) {
-        console.error("生成预览失败:", err);
-        setError(err instanceof Error ? err.message : "生成预览失败");
+        console.error("加载图片失败:", err);
+        setError(err instanceof Error ? err.message : "加载图片失败");
       } finally {
         setLoading(false);
       }
@@ -111,71 +90,252 @@ export function FilterPanel() {
   }, [images.length]);
 
   /**
-   * 应用滤镜到所有图片
+   * 当前图片变化时，重新生成滤镜预览缩略图
    */
-  const applyFilterToAll = useCallback(
-    async (filter: FilterType) => {
-      setIsProcessing(true);
-      setLoading(true, "正在应用滤镜...");
+  useEffect(() => {
+    if (!currentImage?.cropped) return;
 
-      try {
-        const newPreviewUrls = new Map<string, string>();
+    const generateFilterPreviews = async () => {
+      const loadedImg = imagesRef.current.get(currentImage.id);
+      if (!loadedImg) return;
 
-        for (const img of images) {
-          const loadedImg = imagesRef.current.get(img.id);
-          if (!loadedImg) continue;
+      const aspectRatio = loadedImg.width / loadedImg.height;
+      const thumbWidth = Math.min(100, loadedImg.width);
+      const thumbHeight = thumbWidth / aspectRatio;
 
-          const canvas = document.createElement("canvas");
-          canvas.width = loadedImg.width;
-          canvas.height = loadedImg.height;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) continue;
-          ctx.drawImage(loadedImg, 0, 0);
+      const thumbCanvas = document.createElement("canvas");
+      thumbCanvas.width = thumbWidth;
+      thumbCanvas.height = thumbHeight;
+      const thumbCtx = thumbCanvas.getContext("2d");
+      if (!thumbCtx) return;
+      thumbCtx.drawImage(loadedImg, 0, 0, thumbWidth, thumbHeight);
 
-          const filteredUrl = await applyFilter(canvas, filter);
+      const previews: Record<FilterType, string> = {} as Record<
+        FilterType,
+        string
+      >;
+
+      for (const filter of AVAILABLE_FILTERS) {
+        previews[filter] = await applyFilter(thumbCanvas, filter);
+      }
+
+      setFilterPreviews(previews);
+    };
+
+    generateFilterPreviews();
+  }, [currentImage?.id, currentImage?.cropped]);
+
+  /**
+   * 应用单张图片的滤镜并返回预览 URL
+   */
+  const applyFilterToImage = useCallback(
+    async (imgId: string, filter: FilterType): Promise<string | null> => {
+      const loadedImg = imagesRef.current.get(imgId);
+      if (!loadedImg) return null;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = loadedImg.width;
+      canvas.height = loadedImg.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return null;
+      ctx.drawImage(loadedImg, 0, 0);
+
+      return applyFilter(canvas, filter);
+    },
+    [],
+  );
+
+  /**
+   * 为所有图片应用各自的滤镜（初始化或刷新时使用）
+   */
+  const applyAllFilters = useCallback(async () => {
+    setIsProcessing(true);
+    setLoading(true, "正在应用滤镜...");
+    setLoadingProgress({ done: 0, total: images.length, label: "处理中" });
+
+    try {
+      const newPreviewUrls = new Map<string, string>();
+
+      for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+        const filteredUrl = await applyFilterToImage(img.id, img.filter);
+        if (filteredUrl) {
           newPreviewUrls.set(img.id, filteredUrl);
         }
+        setLoadingProgress({
+          done: i + 1,
+          total: images.length,
+          label: "处理中",
+        });
+      }
 
-        setPreviewUrls(newPreviewUrls);
+      setPreviewUrls(newPreviewUrls);
 
-        // 更新 store 中当前图片的滤镜结果
-        const currentFiltered = newPreviewUrls.get(currentImage?.id || "");
-        if (currentFiltered) {
-          setFilteredImage(currentFiltered);
+      // 更新 store 中当前图片的滤镜结果
+      const currentFiltered = newPreviewUrls.get(currentImage?.id || "");
+      if (currentFiltered) {
+        setFilteredImage(currentFiltered);
+      }
+    } catch (err) {
+      console.error("应用滤镜失败:", err);
+      setError(err instanceof Error ? err.message : "应用滤镜失败");
+    } finally {
+      setLoading(false);
+      setLoadingProgress(null);
+      setIsProcessing(false);
+    }
+  }, [
+    images,
+    currentImage?.id,
+    applyFilterToImage,
+    setFilteredImage,
+    setLoading,
+    setLoadingProgress,
+    setError,
+  ]);
+
+  /**
+   * 选择滤镜（仅应用到当前页）
+   */
+  const handleSelectFilter = useCallback(
+    async (filter: FilterType) => {
+      if (!currentImage) return;
+
+      setIsProcessing(true);
+
+      try {
+        // 更新当前图片的滤镜设置
+        updateImageById(currentImage.id, { filter });
+
+        // 应用滤镜并更新预览
+        const filteredUrl = await applyFilterToImage(currentImage.id, filter);
+        if (filteredUrl) {
+          setPreviewUrls((prev) => {
+            const next = new Map(prev);
+            next.set(currentImage.id, filteredUrl);
+            return next;
+          });
+          setFilteredImage(filteredUrl);
         }
       } catch (err) {
         console.error("应用滤镜失败:", err);
         setError(err instanceof Error ? err.message : "应用滤镜失败");
       } finally {
-        setLoading(false);
         setIsProcessing(false);
       }
     },
-    [images, currentImage?.id, setFilteredImage, setLoading, setError],
+    [
+      currentImage,
+      updateImageById,
+      applyFilterToImage,
+      setFilteredImage,
+      setError,
+    ],
   );
 
   /**
-   * 选择滤镜
+   * 将当前滤镜应用到所有图片
    */
-  const handleSelectFilter = useCallback(
-    (filter: FilterType) => {
-      setSelectedFilter(filter);
-      applyFilterToAll(filter);
-    },
-    [setSelectedFilter, applyFilterToAll],
-  );
+  const handleApplyToAll = useCallback(async () => {
+    if (!currentImage) return;
 
-  /**
-   * 导出为 PDF（所有图片）
-   */
-  const handleExportPdf = useCallback(async () => {
-    const allUrls = Array.from(previewUrls.values());
-    if (allUrls.length === 0) return;
+    const currentFilterValue = currentImage.filter;
 
-    setLoading(true, "正在生成 PDF...");
+    setIsProcessing(true);
+    setLoading(true, "正在应用滤镜到所有页面...");
+    setLoadingProgress({ done: 0, total: images.length, label: "批量应用" });
 
     try {
-      const blob = await exportToPdf(allUrls);
+      const newPreviewUrls = new Map<string, string>();
+
+      for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+
+        // 更新每张图片的滤镜设置
+        if (img.filter !== currentFilterValue) {
+          updateImageById(img.id, { filter: currentFilterValue });
+        }
+
+        // 应用滤镜
+        const filteredUrl = await applyFilterToImage(
+          img.id,
+          currentFilterValue,
+        );
+        if (filteredUrl) {
+          newPreviewUrls.set(img.id, filteredUrl);
+        }
+
+        setLoadingProgress({
+          done: i + 1,
+          total: images.length,
+          label: "批量应用",
+        });
+      }
+
+      setPreviewUrls(newPreviewUrls);
+
+      // 更新 store 中当前图片的滤镜结果
+      const currentFiltered = newPreviewUrls.get(currentImage.id);
+      if (currentFiltered) {
+        setFilteredImage(currentFiltered);
+      }
+    } catch (err) {
+      console.error("批量应用滤镜失败:", err);
+      setError(err instanceof Error ? err.message : "批量应用滤镜失败");
+    } finally {
+      setLoading(false);
+      setLoadingProgress(null);
+      setIsProcessing(false);
+    }
+  }, [
+    images,
+    currentImage,
+    updateImageById,
+    applyFilterToImage,
+    setFilteredImage,
+    setLoading,
+    setLoadingProgress,
+    setError,
+  ]);
+
+  /**
+   * 打开导出设置弹窗
+   */
+  const handleExportPdf = useCallback(() => {
+    if (previewUrls.size === 0) return;
+    setExportSettingsOpen(true);
+  }, [previewUrls.size, setExportSettingsOpen]);
+
+  /**
+   * 执行 PDF 导出（由设置弹窗确认后调用）
+   */
+  const doExportPdf = useCallback(async () => {
+    // 按照 images 数组顺序获取 URL（保证顺序一致）
+    const orderedUrls = images
+      .map((img) => previewUrls.get(img.id))
+      .filter((url): url is string => url !== undefined);
+
+    if (orderedUrls.length === 0) return;
+
+    setLoading(true, "正在生成 PDF...");
+    setLoadingProgress({ done: 0, total: orderedUrls.length, label: "导出中" });
+
+    try {
+      // 根据导出设置计算页面尺寸
+      const paperDef = PAPER_SIZES[exportSettings.paperSize];
+      const isLandscape = exportSettings.orientation === "landscape";
+      const pageWidth = isLandscape ? paperDef.height : paperDef.width;
+      const pageHeight = isLandscape ? paperDef.width : paperDef.height;
+
+      const blob = await exportToPdf(orderedUrls, {
+        pageWidth,
+        pageHeight,
+        margin: exportSettings.margin,
+        quality: exportSettings.quality,
+        onProgress: (done, total) => {
+          setLoadingProgress({ done, total, label: "导出中" });
+        },
+      });
       const filename = `scan_${new Date().toISOString().slice(0, 10)}.pdf`;
       downloadBlob(blob, filename);
     } catch (err) {
@@ -183,8 +343,16 @@ export function FilterPanel() {
       setError(err instanceof Error ? err.message : "导出 PDF 失败");
     } finally {
       setLoading(false);
+      setLoadingProgress(null);
     }
-  }, [previewUrls, setLoading, setError]);
+  }, [
+    images,
+    previewUrls,
+    exportSettings,
+    setLoading,
+    setLoadingProgress,
+    setError,
+  ]);
 
   /**
    * 导出为 JPG（当前图片或打包所有）
@@ -221,17 +389,27 @@ export function FilterPanel() {
    * 导出所有图片为 JPG
    */
   const handleExportAllJpg = useCallback(async () => {
-    const allUrls = Array.from(previewUrls.entries());
-    if (allUrls.length === 0) return;
+    // 按照 images 数组顺序获取 URL（保证顺序一致）
+    const orderedUrls = images
+      .map((img) => previewUrls.get(img.id))
+      .filter((url): url is string => url !== undefined);
+
+    if (orderedUrls.length === 0) return;
 
     setLoading(true, "正在导出所有图片...");
+    setLoadingProgress({ done: 0, total: orderedUrls.length, label: "导出中" });
 
     try {
-      for (let i = 0; i < allUrls.length; i++) {
-        const [, url] = allUrls[i];
+      for (let i = 0; i < orderedUrls.length; i++) {
+        const url = orderedUrls[i];
         const blob = await exportToJpg(url);
         const filename = `scan_${new Date().toISOString().slice(0, 10)}_${i + 1}.jpg`;
         downloadBlob(blob, filename);
+        setLoadingProgress({
+          done: i + 1,
+          total: orderedUrls.length,
+          label: "导出中",
+        });
         // 短暂延迟避免浏览器阻止多次下载
         await new Promise((resolve) => setTimeout(resolve, 100));
       }
@@ -240,8 +418,9 @@ export function FilterPanel() {
       setError(err instanceof Error ? err.message : "导出 JPG 失败");
     } finally {
       setLoading(false);
+      setLoadingProgress(null);
     }
-  }, [previewUrls, setLoading, setError]);
+  }, [images, previewUrls, setLoading, setLoadingProgress, setError]);
 
   if (images.length === 0 || !currentImage?.cropped) {
     return null;
@@ -266,6 +445,9 @@ export function FilterPanel() {
 
   const currentPreviewUrl = previewUrls.get(currentImage.id);
 
+  // 当前图片的滤镜
+  const currentFilter = currentImage?.filter || "original";
+
   return (
     <div className="flex flex-col items-center gap-4 p-4 w-full">
       {/* 标题 */}
@@ -273,39 +455,16 @@ export function FilterPanel() {
         <h2 className="text-lg font-semibold text-gray-800">选择滤镜</h2>
         <p className="text-sm text-gray-500">
           {images.length > 1
-            ? `选择滤镜将应用到所有 ${images.length} 张图片`
+            ? `当前编辑第 ${currentIndex + 1} 页，共 ${images.length} 页`
             : "选择最适合的效果"}
         </p>
       </div>
 
       {/* 多图缩略图导航 */}
-      {images.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto py-2 px-1 max-w-full">
-          {images.map((img, index) => (
-            <button
-              key={img.id}
-              onClick={() => setCurrentIndex(index)}
-              className={`
-                relative flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden border-2
-                ${
-                  index === currentIndex
-                    ? "border-blue-500 ring-2 ring-blue-200"
-                    : "border-gray-200 hover:border-gray-400"
-                }
-              `}
-            >
-              <img
-                src={previewUrls.get(img.id) || img.cropped || img.original}
-                alt={`图片 ${index + 1}`}
-                className="w-full h-full object-cover"
-              />
-              <span className="absolute bottom-0 right-0 bg-black/60 text-white text-xs px-1">
-                {index + 1}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
+      <PageStrip
+        previewUrls={previewUrls}
+        disabled={isLoading || isProcessing}
+      />
 
       {/* 预览图 */}
       <div
@@ -332,12 +491,7 @@ export function FilterPanel() {
         )}
 
         {/* 加载遮罩 */}
-        {(isLoading || isProcessing) && (
-          <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center">
-            <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin" />
-            <p className="mt-2 text-white text-sm">{loadingMessage}</p>
-          </div>
-        )}
+        <ProgressOverlay show={isLoading || isProcessing} />
       </div>
 
       {/* 滤镜选择 */}
@@ -350,7 +504,7 @@ export function FilterPanel() {
             className={`
               flex flex-col items-center gap-1 p-2 rounded-lg transition-all
               ${
-                selectedFilter === filter
+                currentFilter === filter
                   ? "ring-2 ring-blue-500 bg-blue-50"
                   : "hover:bg-gray-100"
               }
@@ -376,6 +530,17 @@ export function FilterPanel() {
           </button>
         ))}
       </div>
+
+      {/* 应用到全部按钮（多图时显示） */}
+      {images.length > 1 && (
+        <button
+          onClick={handleApplyToAll}
+          disabled={isLoading || isProcessing}
+          className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+        >
+          将「{getFilterName(currentFilter)}」应用到所有页面
+        </button>
+      )}
 
       {/* 操作按钮 */}
       <div className="flex flex-col gap-3 w-full max-w-xs mt-2">
@@ -414,6 +579,12 @@ export function FilterPanel() {
           </button>
         )}
       </div>
+
+      {/* 导出设置弹窗 */}
+      <ExportSettingsModal
+        imageUrls={Array.from(previewUrls.values())}
+        onConfirm={doExportPdf}
+      />
     </div>
   );
 }

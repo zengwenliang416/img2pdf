@@ -8,6 +8,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { useAppStore } from "@/lib/store";
+import { generateThumbnailFromImage } from "@/lib/utils/thumbnail";
 
 // 支持的图片类型
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
@@ -21,12 +22,14 @@ export function ImageUpload() {
 
   /**
    * 处理单个文件
+   * 读取图片、获取尺寸并生成缩略图
    */
   const processFile = async (
     file: File,
   ): Promise<{
     dataUrl: string;
     size: { width: number; height: number };
+    thumbnail: string;
   } | null> => {
     // 验证文件类型
     if (!ACCEPTED_TYPES.includes(file.type)) {
@@ -46,18 +49,26 @@ export function ImageUpload() {
       reader.readAsDataURL(file);
     });
 
-    // 获取图片尺寸
-    const size = await new Promise<{ width: number; height: number }>(
-      (resolve, reject) => {
-        const img = new Image();
-        img.onload = () =>
-          resolve({ width: img.naturalWidth, height: img.naturalHeight });
-        img.onerror = () => reject(new Error("加载图片失败"));
-        img.src = dataUrl;
-      },
-    );
+    // 获取图片尺寸并生成缩略图（复用同一个 Image 对象）
+    const { size, thumbnail } = await new Promise<{
+      size: { width: number; height: number };
+      thumbnail: string;
+    }>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const size = { width: img.naturalWidth, height: img.naturalHeight };
+          const thumbnail = generateThumbnailFromImage(img);
+          resolve({ size, thumbnail });
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.onerror = () => reject(new Error("加载图片失败"));
+      img.src = dataUrl;
+    });
 
-    return { dataUrl, size };
+    return { dataUrl, size, thumbnail };
   };
 
   /**
@@ -103,6 +114,7 @@ export function ImageUpload() {
           ): r is {
             dataUrl: string;
             size: { width: number; height: number };
+            thumbnail: string;
           } => r !== null,
         );
 

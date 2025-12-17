@@ -6,10 +6,15 @@
  */
 
 import { useAppStore } from "@/lib/store";
-import { ImageUpload, CornerEditor, FilterPanel } from "@/components";
+import {
+  ImageUpload,
+  CornerEditor,
+  FilterPanel,
+  PageManager,
+} from "@/components";
 
 export default function Home() {
-  const { step, error, reset } = useAppStore();
+  const { step, error, reset, images, setPageManagerOpen } = useAppStore();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -45,6 +50,29 @@ export default function Home() {
               active={step === "filter" || step === "export"}
             />
           </div>
+
+          {/* 页面管理按钮（多张图片时显示） */}
+          {images.length > 1 && step !== "upload" && (
+            <button
+              onClick={() => setPageManagerOpen(true)}
+              className="flex items-center gap-1 px-2 py-1 text-sm text-gray-600 hover:text-blue-500 hover:bg-blue-50 rounded transition-colors"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
+                />
+              </svg>
+              <span className="hidden sm:inline">{images.length} 页</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -87,6 +115,9 @@ export default function Home() {
           </p>
         </div>
       </footer>
+
+      {/* 页面管理器（全屏覆盖） */}
+      <PageManager />
     </div>
   );
 }
@@ -127,8 +158,6 @@ function StepIndicator({
  */
 function StepConnector({ active }: { active: boolean }) {
   return (
-    <div
-      className={`w-4 h-0.5 ${active ? "bg-blue-500" : "bg-gray-200"}`}
-    />
+    <div className={`w-4 h-0.5 ${active ? "bg-blue-500" : "bg-gray-200"}`} />
   );
 }
