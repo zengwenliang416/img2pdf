@@ -79,7 +79,7 @@ export async function detectDocumentEdges(
   config: DetectConfig = {},
 ): Promise<Corners | null> {
   console.log("[EdgeDetect] 开始边缘检测...");
-  const cv = await ensureOpenCV();
+  const { cv } = await ensureOpenCV();
   const cfg = { ...DEFAULT_CONFIG, ...config };
 
   // 临时变量，用于确保正确释放内存

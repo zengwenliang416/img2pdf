@@ -3,6 +3,7 @@
  */
 
 export { ensureOpenCV, isOpenCVReady, getOpenCVStatus } from "./ensureOpenCV";
+export type { OpenCVReady } from "./ensureOpenCV";
 export { detectDocumentEdges, getDefaultCorners } from "./detectEdges";
 export type { Point, Corners, DetectConfig } from "./detectEdges";
 export {
