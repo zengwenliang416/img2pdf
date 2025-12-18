@@ -13,7 +13,7 @@ import { generateThumbnailFromImage } from "@/lib/utils/thumbnail";
 // 支持的图片类型
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
-const MAX_FILES = 20; // 最多同时上传 20 张
+const MAX_FILES = 10; // 最多同时上传 10 张
 
 export function ImageUpload() {
   const [isDragging, setIsDragging] = useState(false);

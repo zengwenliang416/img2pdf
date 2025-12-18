@@ -5,6 +5,7 @@
  */
 
 import { PDFDocument } from "pdf-lib";
+import JSZip from "jszip";
 
 /**
  * 导出配置
@@ -82,10 +83,18 @@ async function compressImage(
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
+      // 使用 naturalWidth/naturalHeight 确保使用原始图片尺寸
+      const imgWidth = img.naturalWidth || img.width;
+      const imgHeight = img.naturalHeight || img.height;
+
       // 判断是否需要交换宽高（90° 或 270°）
       const needSwap = rotation === 90 || rotation === 270;
-      const canvasWidth = needSwap ? img.height : img.width;
-      const canvasHeight = needSwap ? img.width : img.height;
+      const canvasWidth = needSwap ? imgHeight : imgWidth;
+      const canvasHeight = needSwap ? imgWidth : imgHeight;
+
+      console.log(
+        `[ExportPdf] 压缩图片: 原始尺寸 ${imgWidth}x${imgHeight}, 输出尺寸 ${canvasWidth}x${canvasHeight}, 旋转 ${rotation}°`,
+      );
 
       const canvas = document.createElement("canvas");
       canvas.width = canvasWidth;
@@ -105,7 +114,7 @@ async function compressImage(
       ctx.save();
       ctx.translate(canvasWidth / 2, canvasHeight / 2);
       ctx.rotate((rotation * Math.PI) / 180);
-      ctx.drawImage(img, -img.width / 2, -img.height / 2);
+      ctx.drawImage(img, -imgWidth / 2, -imgHeight / 2);
       ctx.restore();
 
       // 导出为 JPEG
@@ -230,6 +239,18 @@ export async function exportToPdf(
     const xOffset = cfg.margin + (contentWidth - drawWidth) / 2;
     const yOffset = cfg.margin + (contentHeight - drawHeight) / 2;
 
+    // 计算 DPI（每英寸点数）- 用于判断打印质量
+    // PDF 中 1pt = 1/72 inch
+    const effectiveDpiX = (image.width / drawWidth) * 72;
+    const effectiveDpiY = (image.height / drawHeight) * 72;
+    const effectiveDpi = Math.min(effectiveDpiX, effectiveDpiY);
+
+    console.log(
+      `[ExportPdf] 页面 ${i + 1}: 图片像素 ${image.width}x${image.height}, ` +
+        `PDF绘制尺寸 ${drawWidth.toFixed(1)}x${drawHeight.toFixed(1)}pt, ` +
+        `有效DPI: ${effectiveDpi.toFixed(0)} (${effectiveDpi >= 150 ? "✓ 高质量" : effectiveDpi >= 72 ? "⚠ 中等" : "✗ 低质量"})`,
+    );
+
     // 添加页面（使用实际方向的页面尺寸）
     const page = pdfDoc.addPage([actualPageWidth, actualPageHeight]);
 
@@ -273,10 +294,14 @@ export async function exportToJpg(
     img.src = imageDataUrl;
   });
 
+  // 使用 naturalWidth/naturalHeight 确保使用原始图片尺寸
+  const imgWidth = img.naturalWidth || img.width;
+  const imgHeight = img.naturalHeight || img.height;
+
   // 判断是否需要交换宽高（90° 或 270°）
   const needSwap = rotation === 90 || rotation === 270;
-  const canvasWidth = needSwap ? img.height : img.width;
-  const canvasHeight = needSwap ? img.width : img.height;
+  const canvasWidth = needSwap ? imgHeight : imgWidth;
+  const canvasHeight = needSwap ? imgWidth : imgHeight;
 
   // 绘制到 Canvas 并导出为 JPG
   const canvas = document.createElement("canvas");
@@ -294,7 +319,7 @@ export async function exportToJpg(
   ctx.save();
   ctx.translate(canvasWidth / 2, canvasHeight / 2);
   ctx.rotate((rotation * Math.PI) / 180);
-  ctx.drawImage(img, -img.width / 2, -img.height / 2);
+  ctx.drawImage(img, -imgWidth / 2, -imgHeight / 2);
   ctx.restore();
 
   return new Promise((resolve, reject) => {
@@ -323,4 +348,81 @@ export function downloadBlob(blob: Blob, filename: string): void {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+/**
+ * ZIP 导出配置
+ */
+export interface ZipExportConfig {
+  // 图片质量（0-1）
+  quality?: number;
+  // 文件名前缀
+  filenamePrefix?: string;
+  // 进度回调
+  onProgress?: (done: number, total: number) => void;
+  // 每页独立旋转配置（顺时针度数：0, 90, 180, 270）
+  perPageRotations?: Array<number>;
+}
+
+const DEFAULT_ZIP_CONFIG: Required<
+  Omit<ZipExportConfig, "onProgress" | "perPageRotations">
+> & {
+  onProgress?: (done: number, total: number) => void;
+  perPageRotations?: Array<number>;
+} = {
+  quality: 0.92,
+  filenamePrefix: "scan",
+  onProgress: undefined,
+  perPageRotations: undefined,
+};
+
+/**
+ * 导出多张图片为 ZIP 文件
+ * @param images 图片数据 URL 数组
+ * @param config 导出配置
+ * @returns ZIP 文件的 Blob
+ */
+export async function exportToZip(
+  images: string[],
+  config: ZipExportConfig = {},
+): Promise<Blob> {
+  if (images.length === 0) {
+    throw new Error("至少需要一张图片");
+  }
+
+  const cfg = { ...DEFAULT_ZIP_CONFIG, ...config };
+  const zip = new JSZip();
+  const total = images.length;
+
+  // 计算文件名需要的位数（用于补零）
+  const digits = String(total).length;
+
+  for (let i = 0; i < images.length; i++) {
+    const imageDataUrl = images[i];
+
+    // 获取当前页旋转角度
+    const rotation = cfg.perPageRotations?.[i] ?? 0;
+
+    // 导出为 JPG（同时应用旋转）
+    const jpgBlob = await exportToJpg(imageDataUrl, cfg.quality, rotation);
+
+    // 生成文件名（带补零序号）
+    const index = String(i + 1).padStart(digits, "0");
+    const filename = `${cfg.filenamePrefix}_${index}.jpg`;
+
+    // 添加到 ZIP
+    zip.file(filename, jpgBlob);
+
+    // 进度回调
+    cfg.onProgress?.(i + 1, total);
+  }
+
+  // 生成 ZIP 文件
+  const zipBlob = await zip.generateAsync({
+    type: "blob",
+    compression: "DEFLATE",
+    compressionOptions: { level: 6 },
+  });
+
+  return zipBlob;
 }

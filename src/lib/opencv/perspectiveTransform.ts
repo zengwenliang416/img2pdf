@@ -50,14 +50,20 @@ export async function applyPerspectiveTransform(
   srcCorners: Corners,
   outputSize?: { width: number; height: number },
 ): Promise<string> {
-  console.log("[PerspectiveTransform] 开始处理...");
-  console.log("[PerspectiveTransform] srcCorners:", JSON.stringify(srcCorners));
-  console.log("[PerspectiveTransform] outputSize:", outputSize);
+  // 获取原始图片尺寸
+  const srcWidth =
+    imageSource instanceof HTMLCanvasElement
+      ? imageSource.width
+      : imageSource.naturalWidth || imageSource.width;
+  const srcHeight =
+    imageSource instanceof HTMLCanvasElement
+      ? imageSource.height
+      : imageSource.naturalHeight || imageSource.height;
 
-  console.log("[PerspectiveTransform] 准备加载 OpenCV...");
+  console.log(`[PerspectiveTransform] 原始图片尺寸: ${srcWidth}x${srcHeight}`);
+  console.log("[PerspectiveTransform] srcCorners:", JSON.stringify(srcCorners));
+
   const { cv } = await ensureOpenCV();
-  console.log("[PerspectiveTransform] await 完成!");
-  console.log("[PerspectiveTransform] OpenCV 已加载, cv.Mat:", typeof cv?.Mat);
 
   // 计算输出尺寸
   let width: number, height: number;
@@ -69,7 +75,13 @@ export async function applyPerspectiveTransform(
     console.error("[PerspectiveTransform] 计算尺寸失败:", err);
     throw err;
   }
-  console.log("[PerspectiveTransform] 输出尺寸:", width, "x", height);
+
+  const sizeRatio = (((width * height) / (srcWidth * srcHeight)) * 100).toFixed(
+    1,
+  );
+  console.log(
+    `[PerspectiveTransform] 输出尺寸: ${width}x${height} (${sizeRatio}% 原图面积)`,
+  );
 
   // 临时变量，用于最后释放内存
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

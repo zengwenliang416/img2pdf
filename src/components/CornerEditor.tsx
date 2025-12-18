@@ -12,9 +12,11 @@ import {
   getDefaultCorners,
   applyPerspectiveTransform,
   calculateOutputSize,
+  detectDocumentEdges,
   type Corners,
   type Point,
 } from "@/lib/opencv";
+import { useSizeEditor } from "@/hooks";
 
 // 角点拖拽手柄大小
 const HANDLE_SIZE = 24;
@@ -56,10 +58,17 @@ export function CornerEditor() {
 
   // 输出尺寸调整
   const [showSizeEditor, setShowSizeEditor] = useState(false);
-  const [customWidth, setCustomWidth] = useState<number>(0);
-  const [customHeight, setCustomHeight] = useState<number>(0);
-  const [keepAspectRatio, setKeepAspectRatio] = useState(true);
-  const originalAspectRatio = useRef<number>(1);
+  const {
+    width: customWidth,
+    height: customHeight,
+    keepAspectRatio,
+    setKeepAspectRatio,
+    setWidth: handleWidthChange,
+    setHeight: handleHeightChange,
+    setSize: setSizeFromCorners,
+    applyPreset,
+    presets,
+  } = useSizeEditor();
 
   /**
    * 计算显示尺寸
@@ -89,7 +98,7 @@ export function CornerEditor() {
   }, [currentImage?.size]);
 
   /**
-   * 加载图片并设置默认角点
+   * 加载图片并自动检测边缘
    */
   useEffect(() => {
     if (!currentImage) return;
@@ -113,22 +122,48 @@ export function CornerEditor() {
         });
         imageRef.current = img;
 
-        // 如果没有角点，使用默认角点
+        // 如果没有角点，尝试自动检测边缘
         if (!currentImage.corners) {
-          const defaultCorners = getDefaultCorners(
-            currentImage.size.width,
-            currentImage.size.height,
-            Math.min(currentImage.size.width, currentImage.size.height) * 0.05,
-          );
-          setCorners(defaultCorners);
+          setLoading(true, "正在智能识别文档边缘...");
+
+          try {
+            // 尝试自动检测文档边缘
+            const detectedCorners = await detectDocumentEdges(img, {
+              cannyLow: 50,
+              cannyHigh: 150,
+              minAreaRatio: 0.1,
+            });
+
+            if (detectedCorners) {
+              // 检测成功，使用检测到的角点
+              setCorners(detectedCorners);
+            } else {
+              // 检测失败，使用默认角点（带边距）
+              const defaultCorners = getDefaultCorners(
+                currentImage.size.width,
+                currentImage.size.height,
+                Math.min(currentImage.size.width, currentImage.size.height) *
+                  0.05,
+              );
+              setCorners(defaultCorners);
+            }
+          } catch (detectError) {
+            console.warn("边缘检测失败，使用默认角点:", detectError);
+            // 检测出错，使用默认角点
+            const defaultCorners = getDefaultCorners(
+              currentImage.size.width,
+              currentImage.size.height,
+              Math.min(currentImage.size.width, currentImage.size.height) *
+                0.05,
+            );
+            setCorners(defaultCorners);
+          }
         }
 
         // 初始化输出尺寸
         if (currentImage.corners) {
           const size = calculateOutputSize(currentImage.corners);
-          setCustomWidth(size.width);
-          setCustomHeight(size.height);
-          originalAspectRatio.current = size.width / size.height;
+          setSizeFromCorners(size.width, size.height);
         }
       } catch (err) {
         console.error("加载图片失败:", err);
@@ -157,11 +192,9 @@ export function CornerEditor() {
   useEffect(() => {
     if (currentImage?.corners) {
       const size = calculateOutputSize(currentImage.corners);
-      setCustomWidth(size.width);
-      setCustomHeight(size.height);
-      originalAspectRatio.current = size.width / size.height;
+      setSizeFromCorners(size.width, size.height);
     }
-  }, [currentImage?.corners]);
+  }, [currentImage?.corners, setSizeFromCorners]);
 
   /**
    * 绘制预览
@@ -351,30 +384,40 @@ export function CornerEditor() {
   }, [currentImage?.size, setCorners]);
 
   /**
-   * 处理宽度变化
+   * 智能识别 - 手动触发边缘检测
    */
-  const handleWidthChange = useCallback(
-    (value: number) => {
-      setCustomWidth(value);
-      if (keepAspectRatio && originalAspectRatio.current) {
-        setCustomHeight(Math.round(value / originalAspectRatio.current));
-      }
-    },
-    [keepAspectRatio],
-  );
+  const handleAutoDetect = useCallback(async () => {
+    if (!imageRef.current || !currentImage?.size) return;
 
-  /**
-   * 处理高度变化
-   */
-  const handleHeightChange = useCallback(
-    (value: number) => {
-      setCustomHeight(value);
-      if (keepAspectRatio && originalAspectRatio.current) {
-        setCustomWidth(Math.round(value * originalAspectRatio.current));
+    setLoading(true, "正在智能识别文档边缘...");
+
+    try {
+      const detectedCorners = await detectDocumentEdges(imageRef.current, {
+        cannyLow: 50,
+        cannyHigh: 150,
+        minAreaRatio: 0.1,
+      });
+
+      if (detectedCorners) {
+        setCorners(detectedCorners);
+      } else {
+        // 检测失败时提示用户
+        setError("未能识别到文档边缘，请手动调整角点");
+        // 使用默认角点
+        const defaultCorners = getDefaultCorners(
+          currentImage.size.width,
+          currentImage.size.height,
+          Math.min(currentImage.size.width, currentImage.size.height) * 0.05,
+        );
+        setCorners(defaultCorners);
       }
-    },
-    [keepAspectRatio],
-  );
+    } catch (err) {
+      console.error("边缘检测失败:", err);
+      setError("边缘检测失败，请手动调整角点");
+    } finally {
+      setLoading(false);
+    }
+  }, [currentImage?.size, setCorners, setLoading, setError]);
 
   /**
    * 删除当前图片
@@ -565,19 +608,10 @@ export function CornerEditor() {
 
             {/* 预设尺寸 */}
             <div className="flex gap-2 flex-wrap">
-              {[
-                { label: "A4", w: 2480, h: 3508 },
-                { label: "A5", w: 1748, h: 2480 },
-                { label: "1080p", w: 1920, h: 1080 },
-                { label: "4K", w: 3840, h: 2160 },
-              ].map((preset) => (
+              {presets.map((preset) => (
                 <button
                   key={preset.label}
-                  onClick={() => {
-                    setCustomWidth(preset.w);
-                    setCustomHeight(preset.h);
-                    originalAspectRatio.current = preset.w / preset.h;
-                  }}
+                  onClick={() => applyPreset(preset)}
                   className="px-2 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-100"
                 >
                   {preset.label}
@@ -603,6 +637,26 @@ export function CornerEditor() {
           className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
         >
           重置
+        </button>
+        <button
+          onClick={handleAutoDetect}
+          disabled={isLoading}
+          className="px-4 py-2 rounded-lg border border-green-300 text-green-600 hover:bg-green-50 disabled:opacity-50 flex items-center gap-1"
+        >
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+            />
+          </svg>
+          智能识别
         </button>
         {images.length > 1 && (
           <button

@@ -7,19 +7,14 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  useAppStore,
-  PAPER_SIZES,
-  type PageOrientation,
-  type Rotation,
-} from "@/lib/store";
+import { useAppStore, type Rotation, type PageOrientation } from "@/lib/store";
 import {
   applyFilter,
   AVAILABLE_FILTERS,
   getFilterName,
   type FilterType,
 } from "@/lib/opencv";
-import { exportToPdf, exportToJpg, downloadBlob } from "@/lib/utils/exportPdf";
+import { useExport } from "@/hooks";
 import { ProgressOverlay } from "./ProgressOverlay";
 import { PageStrip } from "./PageStrip";
 import { ExportSettingsModal } from "./ExportSettingsModal";
@@ -56,6 +51,17 @@ export function FilterPanel() {
 
   // 当前图片
   const currentImage = images[currentIndex];
+
+  // 导出功能 hook
+  const {
+    doExportPdf,
+    handleExportJpg,
+    handleExportZip,
+    canExportPdf,
+    canExportJpg,
+    canExportZip,
+    imageCount,
+  } = useExport({ previewUrls });
 
   /**
    * 加载所有图片
@@ -138,12 +144,21 @@ export function FilterPanel() {
       const loadedImg = imagesRef.current.get(imgId);
       if (!loadedImg) return null;
 
+      // 使用 naturalWidth/naturalHeight 确保使用原始图片尺寸
+      const imgWidth = loadedImg.naturalWidth || loadedImg.width;
+      const imgHeight = loadedImg.naturalHeight || loadedImg.height;
+
       const canvas = document.createElement("canvas");
-      canvas.width = loadedImg.width;
-      canvas.height = loadedImg.height;
+      canvas.width = imgWidth;
+      canvas.height = imgHeight;
       const ctx = canvas.getContext("2d");
       if (!ctx) return null;
+      // 使用 3 参数形式，让浏览器以图片原始尺寸绘制，避免缩放导致的栅栏效果
       ctx.drawImage(loadedImg, 0, 0);
+
+      console.log(
+        `[FilterPanel] 应用滤镜 ${filter}，图片尺寸: ${imgWidth}x${imgHeight}`,
+      );
 
       return applyFilter(canvas, filter);
     },
@@ -361,157 +376,6 @@ export function FilterPanel() {
     if (previewUrls.size === 0) return;
     setExportSettingsOpen(true);
   }, [previewUrls.size, setExportSettingsOpen]);
-
-  /**
-   * 执行 PDF 导出（由设置弹窗确认后调用）
-   */
-  const doExportPdf = useCallback(async () => {
-    // 按照 images 数组顺序获取 URL、方向和旋转（保证顺序一致）
-    const orderedData = images
-      .map((img) => ({
-        url: previewUrls.get(img.id),
-        orientation: img.orientation,
-        rotation: img.rotation,
-      }))
-      .filter(
-        (
-          item,
-        ): item is {
-          url: string;
-          orientation: PageOrientation;
-          rotation: number;
-        } => item.url !== undefined,
-      );
-
-    if (orderedData.length === 0) return;
-
-    setLoading(true, "正在生成 PDF...");
-    setLoadingProgress({ done: 0, total: orderedData.length, label: "导出中" });
-
-    try {
-      // 根据导出设置获取纸张基准尺寸（纵向）
-      const paperDef = PAPER_SIZES[exportSettings.paperSize];
-
-      const blob = await exportToPdf(
-        orderedData.map((d) => d.url),
-        {
-          // 纵向基准尺寸
-          pageWidth: paperDef.width,
-          pageHeight: paperDef.height,
-          margin: exportSettings.margin,
-          quality: exportSettings.quality,
-          // 每页独立方向配置
-          perPageOrientations: orderedData.map((d) => d.orientation),
-          // 每页独立旋转配置
-          perPageRotations: orderedData.map((d) => d.rotation),
-          onProgress: (done, total) => {
-            setLoadingProgress({ done, total, label: "导出中" });
-          },
-        },
-      );
-      const filename = `scan_${new Date().toISOString().slice(0, 10)}.pdf`;
-      downloadBlob(blob, filename);
-    } catch (err) {
-      console.error("导出 PDF 失败:", err);
-      setError(err instanceof Error ? err.message : "导出 PDF 失败");
-    } finally {
-      setLoading(false);
-      setLoadingProgress(null);
-    }
-  }, [
-    images,
-    previewUrls,
-    exportSettings,
-    setLoading,
-    setLoadingProgress,
-    setError,
-  ]);
-
-  /**
-   * 导出为 JPG（当前图片或打包所有）
-   */
-  const handleExportJpg = useCallback(async () => {
-    const currentUrl = previewUrls.get(currentImage?.id || "");
-    if (!currentUrl || !currentImage) return;
-
-    setLoading(true, "正在导出图片...");
-
-    try {
-      // 如果只有一张图，直接导出
-      // 如果有多张图，导出当前选中的
-      const blob = await exportToJpg(
-        currentUrl,
-        exportSettings.quality,
-        currentImage.rotation,
-      );
-      const suffix = images.length > 1 ? `_${currentIndex + 1}` : "";
-      const filename = `scan_${new Date().toISOString().slice(0, 10)}${suffix}.jpg`;
-      downloadBlob(blob, filename);
-    } catch (err) {
-      console.error("导出 JPG 失败:", err);
-      setError(err instanceof Error ? err.message : "导出 JPG 失败");
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    previewUrls,
-    currentImage,
-    currentIndex,
-    images.length,
-    exportSettings.quality,
-    setLoading,
-    setError,
-  ]);
-
-  /**
-   * 导出所有图片为 JPG
-   */
-  const handleExportAllJpg = useCallback(async () => {
-    // 按照 images 数组顺序获取 URL 和旋转（保证顺序一致）
-    const orderedData = images
-      .map((img) => ({
-        url: previewUrls.get(img.id),
-        rotation: img.rotation,
-      }))
-      .filter(
-        (item): item is { url: string; rotation: number } =>
-          item.url !== undefined,
-      );
-
-    if (orderedData.length === 0) return;
-
-    setLoading(true, "正在导出所有图片...");
-    setLoadingProgress({ done: 0, total: orderedData.length, label: "导出中" });
-
-    try {
-      for (let i = 0; i < orderedData.length; i++) {
-        const { url, rotation } = orderedData[i];
-        const blob = await exportToJpg(url, exportSettings.quality, rotation);
-        const filename = `scan_${new Date().toISOString().slice(0, 10)}_${i + 1}.jpg`;
-        downloadBlob(blob, filename);
-        setLoadingProgress({
-          done: i + 1,
-          total: orderedData.length,
-          label: "导出中",
-        });
-        // 短暂延迟避免浏览器阻止多次下载
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    } catch (err) {
-      console.error("导出 JPG 失败:", err);
-      setError(err instanceof Error ? err.message : "导出 JPG 失败");
-    } finally {
-      setLoading(false);
-      setLoadingProgress(null);
-    }
-  }, [
-    images,
-    previewUrls,
-    exportSettings.quality,
-    setLoading,
-    setLoadingProgress,
-    setError,
-  ]);
 
   if (images.length === 0 || !currentImage?.cropped) {
     return null;
@@ -775,26 +639,26 @@ export function FilterPanel() {
         <div className="flex gap-3">
           <button
             onClick={handleExportPdf}
-            disabled={isLoading || isProcessing || previewUrls.size === 0}
+            disabled={isLoading || isProcessing || !canExportPdf}
             className="flex-1 px-4 py-3 rounded-lg bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 font-medium"
           >
-            导出 PDF {images.length > 1 && `(${images.length}页)`}
+            导出 PDF {imageCount > 1 && `(${imageCount}页)`}
           </button>
           <button
             onClick={handleExportJpg}
-            disabled={isLoading || isProcessing || !currentPreviewUrl}
+            disabled={isLoading || isProcessing || !canExportJpg}
             className="flex-1 px-4 py-3 rounded-lg border-2 border-blue-500 text-blue-500 hover:bg-blue-50 disabled:opacity-50 font-medium"
           >
             导出 JPG
           </button>
         </div>
-        {images.length > 1 && (
+        {canExportZip && (
           <button
-            onClick={handleExportAllJpg}
-            disabled={isLoading || isProcessing || previewUrls.size === 0}
+            onClick={handleExportZip}
+            disabled={isLoading || isProcessing}
             className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 text-sm"
           >
-            导出所有 JPG ({images.length}张)
+            导出 ZIP ({imageCount}张)
           </button>
         )}
       </div>
