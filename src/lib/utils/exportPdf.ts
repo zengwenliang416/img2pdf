@@ -12,7 +12,7 @@ import { PDFDocument } from "pdf-lib";
 export interface ExportConfig {
   // PDF 标题
   title?: string;
-  // 页面尺寸（默认 A4）
+  // 页面尺寸（默认 A4，当 perPageOrientations 为空时使用）
   pageWidth?: number;
   pageHeight?: number;
   // 页边距
@@ -21,17 +21,27 @@ export interface ExportConfig {
   quality?: number;
   // 进度回调
   onProgress?: (done: number, total: number) => void;
+  // 每页独立方向配置（如果提供，则 pageWidth/pageHeight 作为基础纵向尺寸）
+  perPageOrientations?: Array<"portrait" | "landscape">;
+  // 每页独立旋转配置（顺时针度数：0, 90, 180, 270）
+  perPageRotations?: Array<number>;
 }
 
-const DEFAULT_CONFIG: Required<Omit<ExportConfig, "onProgress">> & {
+const DEFAULT_CONFIG: Required<
+  Omit<ExportConfig, "onProgress" | "perPageOrientations" | "perPageRotations">
+> & {
   onProgress?: (done: number, total: number) => void;
+  perPageOrientations?: Array<"portrait" | "landscape">;
+  perPageRotations?: Array<number>;
 } = {
   title: "扫描文档",
-  pageWidth: 595.28, // A4 宽度 (pt)
-  pageHeight: 841.89, // A4 高度 (pt)
+  pageWidth: 595.28, // A4 宽度 (pt) - 纵向基准
+  pageHeight: 841.89, // A4 高度 (pt) - 纵向基准
   margin: 0,
   quality: 0.92,
   onProgress: undefined,
+  perPageOrientations: undefined,
+  perPageRotations: undefined,
 };
 
 /**
@@ -53,26 +63,33 @@ function getImageType(dataUrl: string): "png" | "jpeg" {
 }
 
 /**
- * 压缩图片（将 PNG 转为 JPEG 并应用质量压缩）
+ * 压缩图片（将 PNG 转为 JPEG 并应用质量压缩和旋转）
  * @param dataUrl 原始图片数据 URL
  * @param quality 压缩质量（0-1）
+ * @param rotation 顺时针旋转角度（0, 90, 180, 270）
  * @returns 压缩后的 JPEG 数据 URL
  */
 async function compressImage(
   dataUrl: string,
   quality: number,
+  rotation: number = 0,
 ): Promise<string> {
-  // 如果已经是 JPEG 且质量接近 1，直接返回
-  if (getImageType(dataUrl) === "jpeg" && quality >= 0.95) {
+  // 如果已经是 JPEG 且质量接近 1 且无需旋转，直接返回
+  if (getImageType(dataUrl) === "jpeg" && quality >= 0.95 && rotation === 0) {
     return dataUrl;
   }
 
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
+      // 判断是否需要交换宽高（90° 或 270°）
+      const needSwap = rotation === 90 || rotation === 270;
+      const canvasWidth = needSwap ? img.height : img.width;
+      const canvasHeight = needSwap ? img.width : img.height;
+
       const canvas = document.createElement("canvas");
-      canvas.width = img.width;
-      canvas.height = img.height;
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
 
       const ctx = canvas.getContext("2d");
       if (!ctx) {
@@ -83,7 +100,13 @@ async function compressImage(
       // 白色背景（防止透明）
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
+
+      // 应用旋转变换
+      ctx.save();
+      ctx.translate(canvasWidth / 2, canvasHeight / 2);
+      ctx.rotate((rotation * Math.PI) / 180);
+      ctx.drawImage(img, -img.width / 2, -img.height / 2);
+      ctx.restore();
 
       // 导出为 JPEG
       const compressedDataUrl = canvas.toDataURL("image/jpeg", quality);
@@ -162,39 +185,53 @@ export async function exportToPdf(
   for (let i = 0; i < images.length; i++) {
     const imageDataUrl = images[i];
 
-    // 压缩图片
-    const compressedDataUrl = await compressImage(imageDataUrl, cfg.quality);
+    // 获取当前页旋转角度
+    const rotation = cfg.perPageRotations?.[i] ?? 0;
+
+    // 压缩图片（同时应用旋转）
+    const compressedDataUrl = await compressImage(
+      imageDataUrl,
+      cfg.quality,
+      rotation,
+    );
 
     // 嵌入图片（压缩后都是 JPEG）
     const imageBytes = await dataUrlToBytes(compressedDataUrl);
     const image = await pdfDoc.embedJpg(imageBytes);
 
+    // 根据每页方向配置确定页面尺寸
+    // cfg.pageWidth/pageHeight 是纵向基准尺寸
+    const orientation = cfg.perPageOrientations?.[i] ?? "portrait";
+    const isLandscape = orientation === "landscape";
+    const actualPageWidth = isLandscape ? cfg.pageHeight : cfg.pageWidth;
+    const actualPageHeight = isLandscape ? cfg.pageWidth : cfg.pageHeight;
+
     // 计算图片在页面上的尺寸（保持宽高比）
-    const pageWidth = cfg.pageWidth - cfg.margin * 2;
-    const pageHeight = cfg.pageHeight - cfg.margin * 2;
+    const contentWidth = actualPageWidth - cfg.margin * 2;
+    const contentHeight = actualPageHeight - cfg.margin * 2;
 
     const imageAspect = image.width / image.height;
-    const pageAspect = pageWidth / pageHeight;
+    const pageAspect = contentWidth / contentHeight;
 
     let drawWidth: number;
     let drawHeight: number;
 
     if (imageAspect > pageAspect) {
       // 图片更宽，以宽度为基准
-      drawWidth = pageWidth;
-      drawHeight = pageWidth / imageAspect;
+      drawWidth = contentWidth;
+      drawHeight = contentWidth / imageAspect;
     } else {
       // 图片更高，以高度为基准
-      drawHeight = pageHeight;
-      drawWidth = pageHeight * imageAspect;
+      drawHeight = contentHeight;
+      drawWidth = contentHeight * imageAspect;
     }
 
     // 居中偏移
-    const xOffset = cfg.margin + (pageWidth - drawWidth) / 2;
-    const yOffset = cfg.margin + (pageHeight - drawHeight) / 2;
+    const xOffset = cfg.margin + (contentWidth - drawWidth) / 2;
+    const yOffset = cfg.margin + (contentHeight - drawHeight) / 2;
 
-    // 添加页面
-    const page = pdfDoc.addPage([cfg.pageWidth, cfg.pageHeight]);
+    // 添加页面（使用实际方向的页面尺寸）
+    const page = pdfDoc.addPage([actualPageWidth, actualPageHeight]);
 
     // 绘制图片
     page.drawImage(image, {
@@ -220,11 +257,13 @@ export async function exportToPdf(
  * 导出单张图片为 JPG
  * @param imageDataUrl 图片数据 URL
  * @param quality 质量（0-1）
+ * @param rotation 顺时针旋转角度（0, 90, 180, 270）
  * @returns JPG 文件的 Blob
  */
 export async function exportToJpg(
   imageDataUrl: string,
   quality: number = 0.92,
+  rotation: number = 0,
 ): Promise<Blob> {
   // 加载图片
   const img = new Image();
@@ -234,10 +273,15 @@ export async function exportToJpg(
     img.src = imageDataUrl;
   });
 
+  // 判断是否需要交换宽高（90° 或 270°）
+  const needSwap = rotation === 90 || rotation === 270;
+  const canvasWidth = needSwap ? img.height : img.width;
+  const canvasHeight = needSwap ? img.width : img.height;
+
   // 绘制到 Canvas 并导出为 JPG
   const canvas = document.createElement("canvas");
-  canvas.width = img.width;
-  canvas.height = img.height;
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
 
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("无法创建 Canvas 上下文");
@@ -245,7 +289,13 @@ export async function exportToJpg(
   // 白色背景（防止透明）
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(img, 0, 0);
+
+  // 应用旋转变换
+  ctx.save();
+  ctx.translate(canvasWidth / 2, canvasHeight / 2);
+  ctx.rotate((rotation * Math.PI) / 180);
+  ctx.drawImage(img, -img.width / 2, -img.height / 2);
+  ctx.restore();
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(

@@ -7,7 +7,12 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAppStore, PAPER_SIZES } from "@/lib/store";
+import {
+  useAppStore,
+  PAPER_SIZES,
+  type PageOrientation,
+  type Rotation,
+} from "@/lib/store";
 import {
   applyFilter,
   AVAILABLE_FILTERS,
@@ -299,6 +304,57 @@ export function FilterPanel() {
   ]);
 
   /**
+   * 选择页面方向（仅应用到当前页）
+   */
+  const handleSelectOrientation = useCallback(
+    (orientation: PageOrientation) => {
+      if (!currentImage) return;
+      updateImageById(currentImage.id, { orientation });
+    },
+    [currentImage, updateImageById],
+  );
+
+  /**
+   * 将当前方向应用到所有页面
+   */
+  const handleApplyOrientationToAll = useCallback(() => {
+    if (!currentImage) return;
+
+    const currentOrientation = currentImage.orientation;
+
+    for (const img of images) {
+      if (img.orientation !== currentOrientation) {
+        updateImageById(img.id, { orientation: currentOrientation });
+      }
+    }
+  }, [images, currentImage, updateImageById]);
+
+  /**
+   * 旋转当前图片（顺时针或逆时针 90 度）
+   */
+  const handleRotate = useCallback(
+    (direction: "cw" | "ccw") => {
+      if (!currentImage) return;
+
+      const currentRotation = currentImage.rotation;
+      const rotations: Rotation[] = [0, 90, 180, 270];
+      const currentIdx = rotations.indexOf(currentRotation);
+
+      let newIdx: number;
+      if (direction === "cw") {
+        // 顺时针：0 -> 90 -> 180 -> 270 -> 0
+        newIdx = (currentIdx + 1) % 4;
+      } else {
+        // 逆时针：0 -> 270 -> 180 -> 90 -> 0
+        newIdx = (currentIdx - 1 + 4) % 4;
+      }
+
+      updateImageById(currentImage.id, { rotation: rotations[newIdx] });
+    },
+    [currentImage, updateImageById],
+  );
+
+  /**
    * 打开导出设置弹窗
    */
   const handleExportPdf = useCallback(() => {
@@ -310,32 +366,49 @@ export function FilterPanel() {
    * 执行 PDF 导出（由设置弹窗确认后调用）
    */
   const doExportPdf = useCallback(async () => {
-    // 按照 images 数组顺序获取 URL（保证顺序一致）
-    const orderedUrls = images
-      .map((img) => previewUrls.get(img.id))
-      .filter((url): url is string => url !== undefined);
+    // 按照 images 数组顺序获取 URL、方向和旋转（保证顺序一致）
+    const orderedData = images
+      .map((img) => ({
+        url: previewUrls.get(img.id),
+        orientation: img.orientation,
+        rotation: img.rotation,
+      }))
+      .filter(
+        (
+          item,
+        ): item is {
+          url: string;
+          orientation: PageOrientation;
+          rotation: number;
+        } => item.url !== undefined,
+      );
 
-    if (orderedUrls.length === 0) return;
+    if (orderedData.length === 0) return;
 
     setLoading(true, "正在生成 PDF...");
-    setLoadingProgress({ done: 0, total: orderedUrls.length, label: "导出中" });
+    setLoadingProgress({ done: 0, total: orderedData.length, label: "导出中" });
 
     try {
-      // 根据导出设置计算页面尺寸
+      // 根据导出设置获取纸张基准尺寸（纵向）
       const paperDef = PAPER_SIZES[exportSettings.paperSize];
-      const isLandscape = exportSettings.orientation === "landscape";
-      const pageWidth = isLandscape ? paperDef.height : paperDef.width;
-      const pageHeight = isLandscape ? paperDef.width : paperDef.height;
 
-      const blob = await exportToPdf(orderedUrls, {
-        pageWidth,
-        pageHeight,
-        margin: exportSettings.margin,
-        quality: exportSettings.quality,
-        onProgress: (done, total) => {
-          setLoadingProgress({ done, total, label: "导出中" });
+      const blob = await exportToPdf(
+        orderedData.map((d) => d.url),
+        {
+          // 纵向基准尺寸
+          pageWidth: paperDef.width,
+          pageHeight: paperDef.height,
+          margin: exportSettings.margin,
+          quality: exportSettings.quality,
+          // 每页独立方向配置
+          perPageOrientations: orderedData.map((d) => d.orientation),
+          // 每页独立旋转配置
+          perPageRotations: orderedData.map((d) => d.rotation),
+          onProgress: (done, total) => {
+            setLoadingProgress({ done, total, label: "导出中" });
+          },
         },
-      });
+      );
       const filename = `scan_${new Date().toISOString().slice(0, 10)}.pdf`;
       downloadBlob(blob, filename);
     } catch (err) {
@@ -359,14 +432,18 @@ export function FilterPanel() {
    */
   const handleExportJpg = useCallback(async () => {
     const currentUrl = previewUrls.get(currentImage?.id || "");
-    if (!currentUrl) return;
+    if (!currentUrl || !currentImage) return;
 
     setLoading(true, "正在导出图片...");
 
     try {
       // 如果只有一张图，直接导出
       // 如果有多张图，导出当前选中的
-      const blob = await exportToJpg(currentUrl);
+      const blob = await exportToJpg(
+        currentUrl,
+        exportSettings.quality,
+        currentImage.rotation,
+      );
       const suffix = images.length > 1 ? `_${currentIndex + 1}` : "";
       const filename = `scan_${new Date().toISOString().slice(0, 10)}${suffix}.jpg`;
       downloadBlob(blob, filename);
@@ -378,9 +455,10 @@ export function FilterPanel() {
     }
   }, [
     previewUrls,
-    currentImage?.id,
+    currentImage,
     currentIndex,
     images.length,
+    exportSettings.quality,
     setLoading,
     setError,
   ]);
@@ -389,25 +467,31 @@ export function FilterPanel() {
    * 导出所有图片为 JPG
    */
   const handleExportAllJpg = useCallback(async () => {
-    // 按照 images 数组顺序获取 URL（保证顺序一致）
-    const orderedUrls = images
-      .map((img) => previewUrls.get(img.id))
-      .filter((url): url is string => url !== undefined);
+    // 按照 images 数组顺序获取 URL 和旋转（保证顺序一致）
+    const orderedData = images
+      .map((img) => ({
+        url: previewUrls.get(img.id),
+        rotation: img.rotation,
+      }))
+      .filter(
+        (item): item is { url: string; rotation: number } =>
+          item.url !== undefined,
+      );
 
-    if (orderedUrls.length === 0) return;
+    if (orderedData.length === 0) return;
 
     setLoading(true, "正在导出所有图片...");
-    setLoadingProgress({ done: 0, total: orderedUrls.length, label: "导出中" });
+    setLoadingProgress({ done: 0, total: orderedData.length, label: "导出中" });
 
     try {
-      for (let i = 0; i < orderedUrls.length; i++) {
-        const url = orderedUrls[i];
-        const blob = await exportToJpg(url);
+      for (let i = 0; i < orderedData.length; i++) {
+        const { url, rotation } = orderedData[i];
+        const blob = await exportToJpg(url, exportSettings.quality, rotation);
         const filename = `scan_${new Date().toISOString().slice(0, 10)}_${i + 1}.jpg`;
         downloadBlob(blob, filename);
         setLoadingProgress({
           done: i + 1,
-          total: orderedUrls.length,
+          total: orderedData.length,
           label: "导出中",
         });
         // 短暂延迟避免浏览器阻止多次下载
@@ -420,18 +504,32 @@ export function FilterPanel() {
       setLoading(false);
       setLoadingProgress(null);
     }
-  }, [images, previewUrls, setLoading, setLoadingProgress, setError]);
+  }, [
+    images,
+    previewUrls,
+    exportSettings.quality,
+    setLoading,
+    setLoadingProgress,
+    setError,
+  ]);
 
   if (images.length === 0 || !currentImage?.cropped) {
     return null;
   }
 
-  // 计算预览图尺寸
+  // 计算预览图尺寸（考虑旋转）
   const loadedImg = imagesRef.current.get(currentImage.id);
+  const rotation = currentImage?.rotation || 0;
+  const needSwapDimensions = rotation === 90 || rotation === 270;
+
   let previewWidth = PREVIEW_MAX_WIDTH;
   let previewHeight = PREVIEW_MAX_WIDTH;
   if (loadedImg) {
-    const aspectRatio = loadedImg.width / loadedImg.height;
+    // 根据旋转决定是否交换原始图片的宽高来计算宽高比
+    const imgWidth = needSwapDimensions ? loadedImg.height : loadedImg.width;
+    const imgHeight = needSwapDimensions ? loadedImg.width : loadedImg.height;
+    const aspectRatio = imgWidth / imgHeight;
+
     if (aspectRatio > 1) {
       previewHeight = previewWidth / aspectRatio;
     } else {
@@ -468,14 +566,20 @@ export function FilterPanel() {
 
       {/* 预览图 */}
       <div
-        className="relative rounded-lg overflow-hidden shadow-lg bg-gray-100"
+        className="relative rounded-lg overflow-hidden shadow-lg bg-gray-100 flex items-center justify-center"
         style={{ width: previewWidth, height: previewHeight }}
       >
         {currentPreviewUrl ? (
           <img
             src={currentPreviewUrl}
             alt="预览"
-            className="w-full h-full object-contain"
+            className="object-contain transition-transform duration-200"
+            style={{
+              // 90°/270° 旋转时，图片尺寸需要交换以适应旋转后的显示
+              maxWidth: needSwapDimensions ? previewHeight : previewWidth,
+              maxHeight: needSwapDimensions ? previewWidth : previewHeight,
+              transform: `rotate(${rotation}deg)`,
+            }}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
@@ -492,6 +596,47 @@ export function FilterPanel() {
 
         {/* 加载遮罩 */}
         <ProgressOverlay show={isLoading || isProcessing} />
+      </div>
+
+      {/* 旋转控制 */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => handleRotate("ccw")}
+          disabled={isLoading || isProcessing}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+          title="逆时针旋转 90°"
+        >
+          <svg
+            className="w-5 h-5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M2.5 2v6h6M2.66 15.57a10 10 0 1 0 .57-8.38" />
+          </svg>
+          <span className="text-sm">左转</span>
+        </button>
+        <span className="text-sm text-gray-500">
+          {currentImage?.rotation || 0}°
+        </span>
+        <button
+          onClick={() => handleRotate("cw")}
+          disabled={isLoading || isProcessing}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+          title="顺时针旋转 90°"
+        >
+          <svg
+            className="w-5 h-5"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38" />
+          </svg>
+          <span className="text-sm">右转</span>
+        </button>
       </div>
 
       {/* 滤镜选择 */}
@@ -531,7 +676,7 @@ export function FilterPanel() {
         ))}
       </div>
 
-      {/* 应用到全部按钮（多图时显示） */}
+      {/* 应用滤镜到全部按钮（多图时显示） */}
       {images.length > 1 && (
         <button
           onClick={handleApplyToAll}
@@ -541,6 +686,80 @@ export function FilterPanel() {
           将「{getFilterName(currentFilter)}」应用到所有页面
         </button>
       )}
+
+      {/* 页面方向选择 */}
+      <div className="w-full max-w-xs">
+        <label className="block text-sm font-medium text-gray-700 mb-2 text-center">
+          当前页导出方向
+        </label>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => handleSelectOrientation("portrait")}
+            disabled={isLoading || isProcessing}
+            className={`
+              flex items-center justify-center gap-2 px-3 py-2 rounded-lg border-2 transition-colors
+              ${
+                currentImage?.orientation === "portrait"
+                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                  : "border-gray-200 text-gray-700 hover:border-gray-300"
+              }
+              disabled:opacity-50
+            `}
+          >
+            <svg className="w-4 h-6" viewBox="0 0 16 24" fill="currentColor">
+              <rect
+                x="1"
+                y="1"
+                width="14"
+                height="22"
+                rx="1"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+            </svg>
+            <span className="text-sm font-medium">纵向</span>
+          </button>
+          <button
+            onClick={() => handleSelectOrientation("landscape")}
+            disabled={isLoading || isProcessing}
+            className={`
+              flex items-center justify-center gap-2 px-3 py-2 rounded-lg border-2 transition-colors
+              ${
+                currentImage?.orientation === "landscape"
+                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                  : "border-gray-200 text-gray-700 hover:border-gray-300"
+              }
+              disabled:opacity-50
+            `}
+          >
+            <svg className="w-6 h-4" viewBox="0 0 24 16" fill="currentColor">
+              <rect
+                x="1"
+                y="1"
+                width="22"
+                height="14"
+                rx="1"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+            </svg>
+            <span className="text-sm font-medium">横向</span>
+          </button>
+        </div>
+        {/* 应用方向到全部按钮（多图时显示） */}
+        {images.length > 1 && (
+          <button
+            onClick={handleApplyOrientationToAll}
+            disabled={isLoading || isProcessing}
+            className="w-full mt-2 px-4 py-1.5 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+          >
+            将「{currentImage?.orientation === "portrait" ? "纵向" : "横向"}
+            」应用到所有页面
+          </button>
+        )}
+      </div>
 
       {/* 操作按钮 */}
       <div className="flex flex-col gap-3 w-full max-w-xs mt-2">

@@ -7,12 +7,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import {
-  useAppStore,
-  PAPER_SIZES,
-  type PaperSize,
-  type PageOrientation,
-} from "@/lib/store";
+import { useAppStore, PAPER_SIZES, type PaperSize } from "@/lib/store";
 import { estimatePdfSize, formatFileSize } from "@/lib/utils/exportPdf";
 
 interface ExportSettingsModalProps {
@@ -80,14 +75,6 @@ export function ExportSettingsModal({
   const handlePaperSizeChange = useCallback(
     (paperSize: PaperSize) => {
       updateExportSettings({ paperSize });
-    },
-    [updateExportSettings],
-  );
-
-  // 更新页面方向
-  const handleOrientationChange = useCallback(
-    (orientation: PageOrientation) => {
-      updateExportSettings({ orientation });
     },
     [updateExportSettings],
   );
@@ -166,73 +153,6 @@ export function ExportSettingsModal({
             </div>
           </div>
 
-          {/* 页面方向 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              页面方向
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => handleOrientationChange("portrait")}
-                className={`
-                  flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-colors
-                  ${
-                    exportSettings.orientation === "portrait"
-                      ? "border-blue-500 bg-blue-50 text-blue-700"
-                      : "border-gray-200 text-gray-700 hover:border-gray-300"
-                  }
-                `}
-              >
-                <svg
-                  className="w-5 h-8"
-                  viewBox="0 0 20 32"
-                  fill="currentColor"
-                >
-                  <rect
-                    x="1"
-                    y="1"
-                    width="18"
-                    height="30"
-                    rx="2"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  />
-                </svg>
-                <span className="font-medium">纵向</span>
-              </button>
-              <button
-                onClick={() => handleOrientationChange("landscape")}
-                className={`
-                  flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 transition-colors
-                  ${
-                    exportSettings.orientation === "landscape"
-                      ? "border-blue-500 bg-blue-50 text-blue-700"
-                      : "border-gray-200 text-gray-700 hover:border-gray-300"
-                  }
-                `}
-              >
-                <svg
-                  className="w-8 h-5"
-                  viewBox="0 0 32 20"
-                  fill="currentColor"
-                >
-                  <rect
-                    x="1"
-                    y="1"
-                    width="30"
-                    height="18"
-                    rx="2"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  />
-                </svg>
-                <span className="font-medium">横向</span>
-              </button>
-            </div>
-          </div>
-
           {/* 导出质量 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -281,6 +201,7 @@ export function ExportSettingsModal({
             <p>
               <span className="font-medium">提示：</span>
               图片将按当前顺序嵌入 PDF，每页一张图片，居中显示并保持宽高比。
+              每页方向可在滤镜页面单独设置。
             </p>
           </div>
         </div>

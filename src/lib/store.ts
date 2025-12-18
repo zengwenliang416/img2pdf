@@ -93,6 +93,9 @@ export interface ImageItem {
 
   // 当前页滤镜（每页独立）
   filter: FilterType;
+
+  // 当前页导出方向（每页独立）
+  orientation: PageOrientation;
 }
 
 /**
@@ -274,10 +277,11 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   /**
    * 添加图片（支持多张）
-   * 补齐 thumbnail/rotation/filter 默认值
+   * 补齐 thumbnail/rotation/filter/orientation 默认值
    */
   addImages: (items) => {
     const defaultFilter = get().selectedFilter;
+    const defaultOrientation = get().exportSettings.orientation;
 
     const newImages: ImageItem[] = items.map((item) => ({
       id: generateId(),
@@ -290,6 +294,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
       thumbnail: item.thumbnail ?? null,
       rotation: 0,
       filter: defaultFilter,
+      orientation: defaultOrientation,
     }));
 
     set((state) => ({
