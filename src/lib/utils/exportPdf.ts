@@ -58,27 +58,34 @@ async function dataUrlToBytes(dataUrl: string): Promise<Uint8Array> {
 
 /**
  * 获取图片类型
+ * 注意：blob: URL 无法通过字符串判断类型，默认需要转换
  */
-function getImageType(dataUrl: string): "png" | "jpeg" {
-  if (dataUrl.startsWith("data:image/png")) return "png";
+function getImageType(url: string): "png" | "jpeg" | "unknown" {
+  if (url.startsWith("data:image/png")) return "png";
+  if (url.startsWith("data:image/jpeg") || url.startsWith("data:image/jpg"))
+    return "jpeg";
+  // blob: URL 或其他格式无法判断，标记为 unknown
+  if (url.startsWith("blob:")) return "unknown";
   return "jpeg";
 }
 
 /**
  * 压缩图片（将 PNG 转为 JPEG 并应用质量压缩和旋转）
- * @param dataUrl 原始图片数据 URL
+ * @param imageUrl 原始图片 URL（支持 data: 和 blob:）
  * @param quality 压缩质量（0-1）
  * @param rotation 顺时针旋转角度（0, 90, 180, 270）
  * @returns 压缩后的 JPEG 数据 URL
  */
 async function compressImage(
-  dataUrl: string,
+  imageUrl: string,
   quality: number,
   rotation: number = 0,
 ): Promise<string> {
-  // 如果已经是 JPEG 且质量接近 1 且无需旋转，直接返回
-  if (getImageType(dataUrl) === "jpeg" && quality >= 0.95 && rotation === 0) {
-    return dataUrl;
+  const imageType = getImageType(imageUrl);
+  // 只有确定是 JPEG 的 data: URL 且质量高且无旋转时才可跳过
+  // blob: URL 类型未知，必须经过转换以确保输出为 JPEG
+  if (imageType === "jpeg" && quality >= 0.95 && rotation === 0) {
+    return imageUrl;
   }
 
   return new Promise((resolve, reject) => {
@@ -123,7 +130,7 @@ async function compressImage(
       resolve(compressedDataUrl);
     };
     img.onerror = () => reject(new Error("图片加载失败"));
-    img.src = dataUrl;
+    img.src = imageUrl;
   });
 }
 
