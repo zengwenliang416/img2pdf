@@ -6,6 +6,7 @@
  */
 
 import { useAppStore } from "@/lib/store";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ImageUpload,
   CornerEditor,
@@ -13,6 +14,21 @@ import {
   PageManager,
   OpenCVErrorBoundary,
 } from "@/components";
+
+// 步骤过渡动画变体
+const stepVariants = {
+  initial: { opacity: 0, x: 20 },
+  animate: {
+    opacity: 1,
+    x: 0,
+    transition: { duration: 0.3, ease: [0, 0, 0.2, 1] },
+  },
+  exit: {
+    opacity: 0,
+    x: -20,
+    transition: { duration: 0.2, ease: [0.4, 0, 1, 1] },
+  },
+} as const;
 
 export default function Home() {
   const { step, error, reset, images, setPageManagerOpen } = useAppStore();
@@ -130,19 +146,47 @@ export default function Home() {
         </div>
       )}
 
-      {/* 主内容区 */}
-      <main className="max-w-2xl mx-auto pb-16">
-        {step === "upload" && <ImageUpload />}
-        {step === "crop" && (
-          <OpenCVErrorBoundary onReset={reset}>
-            <CornerEditor />
-          </OpenCVErrorBoundary>
-        )}
-        {(step === "filter" || step === "export") && (
-          <OpenCVErrorBoundary onReset={reset}>
-            <FilterPanel />
-          </OpenCVErrorBoundary>
-        )}
+      {/* 主内容区 - 带步骤过渡动画 */}
+      <main className="max-w-2xl mx-auto pb-16 overflow-hidden">
+        <AnimatePresence mode="wait">
+          {step === "upload" && (
+            <motion.div
+              key="upload"
+              variants={stepVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              <ImageUpload />
+            </motion.div>
+          )}
+          {step === "crop" && (
+            <motion.div
+              key="crop"
+              variants={stepVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              <OpenCVErrorBoundary onReset={reset}>
+                <CornerEditor />
+              </OpenCVErrorBoundary>
+            </motion.div>
+          )}
+          {(step === "filter" || step === "export") && (
+            <motion.div
+              key="filter"
+              variants={stepVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+            >
+              <OpenCVErrorBoundary onReset={reset}>
+                <FilterPanel />
+              </OpenCVErrorBoundary>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
 
       {/* 底部隐私信息 - 极简悬浮式 */}

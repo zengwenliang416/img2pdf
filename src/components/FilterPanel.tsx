@@ -7,6 +7,7 @@
  */
 
 import { useCallback } from "react";
+import { motion } from "framer-motion";
 import { useAppStore, type Rotation, type PageOrientation } from "@/lib/store";
 import {
   AVAILABLE_FILTERS,
@@ -357,21 +358,28 @@ export function FilterPanel() {
       {/* 滤镜选择 */}
       <div className="flex gap-4 overflow-x-auto py-3 px-2 custom-scrollbar">
         {AVAILABLE_FILTERS.map((filter) => (
-          <button
+          <motion.button
             key={filter}
             onClick={() => handleSelectFilter(filter)}
             disabled={isLoading || isProcessing}
+            whileHover={{ scale: 1.02, y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            animate={{
+              scale: currentFilter === filter ? 1.02 : 1,
+              y: currentFilter === filter ? -2 : 0,
+            }}
+            transition={{ type: "spring", stiffness: 400, damping: 25 }}
             className={`
-              flex flex-col items-center gap-2 p-3 rounded-xl transition-all duration-200
+              flex flex-col items-center gap-2 p-3 rounded-xl transition-colors duration-200
               ${
                 currentFilter === filter
-                  ? "ring-2 ring-[var(--primary)] bg-[var(--primary-50)] shadow-md"
+                  ? "ring-2 ring-[var(--primary)] bg-[var(--primary-50)] shadow-lg"
                   : "hover:bg-[var(--neutral-50)] hover:shadow-sm"
               }
-              disabled:opacity-50
+              disabled:opacity-50 disabled:pointer-events-none
             `}
           >
-            <div className="w-20 h-20 rounded-lg overflow-hidden bg-[var(--neutral-200)] shadow-inner">
+            <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-[var(--neutral-200)] shadow-inner">
               {filterPreviews[filter] ? (
                 <img
                   src={filterPreviews[filter]}
@@ -383,11 +391,39 @@ export function FilterPanel() {
                   <div className="w-5 h-5 border-2 border-[var(--neutral-400)] border-t-transparent rounded-full animate-spin" />
                 </div>
               )}
+              {/* 选中指示器 */}
+              {currentFilter === filter && (
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="absolute top-1 right-1 w-5 h-5 bg-[var(--primary)] rounded-full flex items-center justify-center shadow-md"
+                >
+                  <svg
+                    className="w-3 h-3 text-white"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={3}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                </motion.div>
+              )}
             </div>
-            <span className="text-sm font-medium text-[var(--neutral-700)]">
+            <span
+              className={`text-sm font-medium transition-colors duration-200 ${
+                currentFilter === filter
+                  ? "text-[var(--primary-700)]"
+                  : "text-[var(--neutral-700)]"
+              }`}
+            >
               {getFilterName(filter)}
             </span>
-          </button>
+          </motion.button>
         ))}
       </div>
 
@@ -408,17 +444,20 @@ export function FilterPanel() {
           当前页导出方向
         </label>
         <div className="grid grid-cols-2 gap-4">
-          <button
+          <motion.button
             onClick={() => handleSelectOrientation("portrait")}
             disabled={isLoading || isProcessing}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 400, damping: 25 }}
             className={`
-              flex items-center justify-center gap-3 px-5 py-4 rounded-xl border-2 transition-all duration-200
+              flex items-center justify-center gap-3 px-5 py-4 rounded-xl border-2 transition-colors duration-200
               ${
                 currentImage?.orientation === "portrait"
                   ? "border-[var(--primary)] bg-[var(--primary-50)] text-[var(--primary-700)] shadow-md"
                   : "border-[var(--neutral-200)] text-[var(--neutral-700)] hover:border-[var(--neutral-300)] hover:shadow-sm"
               }
-              disabled:opacity-50
+              disabled:opacity-50 disabled:pointer-events-none
             `}
           >
             <svg className="w-5 h-8" viewBox="0 0 16 24" fill="currentColor">
@@ -434,18 +473,21 @@ export function FilterPanel() {
               />
             </svg>
             <span className="text-base font-medium">纵向</span>
-          </button>
-          <button
+          </motion.button>
+          <motion.button
             onClick={() => handleSelectOrientation("landscape")}
             disabled={isLoading || isProcessing}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 400, damping: 25 }}
             className={`
-              flex items-center justify-center gap-3 px-5 py-4 rounded-xl border-2 transition-all duration-200
+              flex items-center justify-center gap-3 px-5 py-4 rounded-xl border-2 transition-colors duration-200
               ${
                 currentImage?.orientation === "landscape"
                   ? "border-[var(--primary)] bg-[var(--primary-50)] text-[var(--primary-700)] shadow-md"
                   : "border-[var(--neutral-200)] text-[var(--neutral-700)] hover:border-[var(--neutral-300)] hover:shadow-sm"
               }
-              disabled:opacity-50
+              disabled:opacity-50 disabled:pointer-events-none
             `}
           >
             <svg className="w-8 h-5" viewBox="0 0 24 16" fill="currentColor">
@@ -461,7 +503,7 @@ export function FilterPanel() {
               />
             </svg>
             <span className="text-base font-medium">横向</span>
-          </button>
+          </motion.button>
         </div>
         {/* 应用方向到全部按钮（多图时显示） */}
         {images.length > 1 && (

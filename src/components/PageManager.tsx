@@ -81,16 +81,16 @@ function SortablePageItem({
       onClick={() => onPageClick(img, index)}
       className={`
         relative aspect-[3/4] rounded-lg overflow-hidden cursor-grab active:cursor-grabbing
-        border-2 transition-all duration-150
-        ${isDragging ? "ring-4 ring-blue-300 shadow-2xl" : ""}
+        border-2 transition-all duration-200
+        ${isDragging ? "ring-4 ring-[var(--primary-400)] shadow-2xl scale-105" : ""}
         ${
           isSelectionMode
             ? isSelected
-              ? "border-blue-500 ring-2 ring-blue-400"
-              : "border-gray-600 hover:border-gray-400"
+              ? "border-[var(--primary-500)] ring-2 ring-[var(--primary-400)]"
+              : "border-[var(--glass-border)] hover:border-[var(--neutral-400)]"
             : isActive
-              ? "border-blue-500 ring-2 ring-blue-400"
-              : "border-gray-600 hover:border-gray-400"
+              ? "border-[var(--primary-500)] ring-2 ring-[var(--primary-400)]"
+              : "border-[var(--glass-border)] hover:border-[var(--neutral-400)]"
         }
       `}
     >
@@ -107,10 +107,10 @@ function SortablePageItem({
           <div
             className={`
               w-6 h-6 rounded-full border-2 flex items-center justify-center
-              transition-colors
+              transition-all duration-200
               ${
                 isSelected
-                  ? "bg-blue-500 border-blue-500"
+                  ? "bg-[var(--primary-500)] border-[var(--primary-500)]"
                   : "bg-black/40 border-white/60"
               }
             `}
@@ -137,14 +137,15 @@ function SortablePageItem({
       {/* 页码标签 */}
       <span
         className={`
-          absolute bottom-1 right-1 px-2 py-0.5 rounded text-sm font-medium pointer-events-none
+          absolute bottom-1 right-1 px-2 py-0.5 rounded-md text-sm font-medium pointer-events-none
+          transition-all duration-200
           ${
             isSelectionMode
               ? isSelected
-                ? "bg-blue-500 text-white"
+                ? "bg-[var(--primary-500)] text-white"
                 : "bg-black/60 text-white"
               : isActive
-                ? "bg-blue-500 text-white"
+                ? "bg-[var(--primary-500)] text-white"
                 : "bg-black/60 text-white"
           }
         `}
@@ -156,7 +157,7 @@ function SortablePageItem({
       {!isSelectionMode && isActive && (
         <div className="absolute top-1 left-1 pointer-events-none">
           <svg
-            className="w-5 h-5 text-blue-500"
+            className="w-5 h-5 text-[var(--primary-500)]"
             fill="currentColor"
             viewBox="0 0 20 20"
           >
@@ -171,7 +172,7 @@ function SortablePageItem({
 
       {/* 拖拽指示器 */}
       {isDragging && (
-        <div className="absolute inset-0 bg-blue-500/20 pointer-events-none" />
+        <div className="absolute inset-0 bg-[var(--primary-500)]/20 pointer-events-none" />
       )}
     </div>
   );
@@ -261,15 +262,15 @@ export function PageManager({ previewUrls }: PageManagerProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 flex flex-col">
-      {/* 头部 */}
-      <div className="flex items-center justify-between px-4 py-3 bg-gray-900 border-b border-gray-700">
+    <div className="fixed inset-0 z-50 bg-[var(--overlay-bg)] backdrop-blur-sm flex flex-col animate-fade-in">
+      {/* 头部 - 玻璃态设计 */}
+      <div className="flex items-center justify-between px-4 py-3 glass-panel-strong border-b border-[var(--glass-border)]">
         <div className="flex items-center gap-3">
           {isSelectionMode ? (
             <>
               <button
                 onClick={exitSelectionMode}
-                className="p-1.5 text-gray-400 hover:text-white transition-colors"
+                className="p-1.5 text-[var(--neutral-400)] hover:text-[var(--foreground)] transition-colors"
                 aria-label="取消选择"
               >
                 <svg
@@ -286,12 +287,12 @@ export function PageManager({ previewUrls }: PageManagerProps) {
                   />
                 </svg>
               </button>
-              <span className="text-white font-medium">
+              <span className="text-[var(--foreground)] font-medium">
                 已选择 {selectedIds.length} 项
               </span>
             </>
           ) : (
-            <h2 className="text-lg font-semibold text-white">
+            <h2 className="text-lg font-semibold text-[var(--foreground)]">
               页面管理 ({images.length} 页)
             </h2>
           )}
@@ -307,7 +308,7 @@ export function PageManager({ previewUrls }: PageManagerProps) {
                     ? clearSelection
                     : selectAll
                 }
-                className="px-3 py-1.5 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                className="px-3 py-1.5 text-sm text-[var(--neutral-600)] hover:text-[var(--foreground)] hover:bg-[var(--neutral-100)] rounded-lg transition-all duration-200"
               >
                 {selectedIds.length === images.length ? "取消全选" : "全选"}
               </button>
@@ -315,7 +316,7 @@ export function PageManager({ previewUrls }: PageManagerProps) {
               <button
                 onClick={handleDeleteSelected}
                 disabled={selectedIds.length === 0}
-                className="px-3 py-1.5 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-3 py-1.5 text-sm bg-[var(--error)] text-white rounded-lg hover:bg-[#dc2626] hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
               >
                 删除 ({selectedIds.length})
               </button>
@@ -326,7 +327,7 @@ export function PageManager({ previewUrls }: PageManagerProps) {
               {images.length > 1 && (
                 <button
                   onClick={enterSelectionMode}
-                  className="px-3 py-1.5 text-sm text-gray-300 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                  className="px-3 py-1.5 text-sm text-[var(--neutral-400)] hover:text-[var(--foreground)] hover:bg-[var(--neutral-100)] rounded-lg transition-all duration-200"
                 >
                   选择
                 </button>
@@ -334,7 +335,7 @@ export function PageManager({ previewUrls }: PageManagerProps) {
               {/* 关闭按钮 */}
               <button
                 onClick={() => setPageManagerOpen(false)}
-                className="p-2 text-gray-400 hover:text-white transition-colors"
+                className="p-2 text-[var(--neutral-400)] hover:text-[var(--foreground)] hover:bg-[var(--neutral-100)] rounded-lg transition-all duration-200"
                 aria-label="关闭"
               >
                 <svg
@@ -386,8 +387,8 @@ export function PageManager({ previewUrls }: PageManagerProps) {
       </div>
 
       {/* 底部提示 */}
-      <div className="px-4 py-3 bg-gray-900 border-t border-gray-700 text-center">
-        <p className="text-sm text-gray-400">
+      <div className="px-4 py-3 glass-panel-strong border-t border-[var(--glass-border)] text-center">
+        <p className="text-sm text-[var(--neutral-400)]">
           {isSelectionMode
             ? "点击页面进行选择，可批量删除"
             : "拖拽调整顺序，点击跳转编辑"}

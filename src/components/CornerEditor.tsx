@@ -21,8 +21,10 @@ import { cornerLogger as log } from "@/lib/utils/logger";
 import { ProgressOverlay } from "./ProgressOverlay";
 import { Button } from "./ui";
 
-// 角点拖拽手柄大小
+// 角点拖拽手柄大小（视觉）
 const HANDLE_SIZE = 24;
+// 触摸热区大小（移动端友好）
+const TOUCH_SIZE = 48;
 // 最小显示尺寸
 const MIN_DISPLAY_WIDTH = 300;
 const MAX_DISPLAY_WIDTH = 600;
@@ -527,28 +529,39 @@ export function CornerEditor() {
       >
         <canvas ref={canvasRef} className="rounded-2xl scanner-paper" />
 
-        {/* 角点手柄 - 青色高可见引导线 */}
+        {/* 角点手柄 - 青色高可见引导线 + 48px 透明触摸热区 */}
         {scaledCorners?.map((point, index) => (
           <div
             key={index}
-            className={`
-              absolute rounded-full bg-white border-[3px] border-[var(--accent-cyan)]
-              shadow-lg cursor-move transition-all duration-200
-              ${
-                draggingIndex === index
-                  ? "scale-125 bg-[var(--accent-cyan-light)]/20 ring-4 ring-[var(--accent-cyan)]/30"
-                  : "hover:scale-110 hover:shadow-xl"
-              }
-            `}
+            className="absolute cursor-move"
             style={{
-              width: HANDLE_SIZE,
-              height: HANDLE_SIZE,
-              left: point.x - HANDLE_SIZE / 2,
-              top: point.y - HANDLE_SIZE / 2,
+              width: TOUCH_SIZE,
+              height: TOUCH_SIZE,
+              left: point.x - TOUCH_SIZE / 2,
+              top: point.y - TOUCH_SIZE / 2,
             }}
             onMouseDown={handleDragStart(index)}
             onTouchStart={handleDragStart(index)}
-          />
+          >
+            {/* 视觉手柄 - 居中在触摸热区内 */}
+            <div
+              className={`
+                absolute rounded-full bg-white border-[3px] border-[var(--accent-cyan)]
+                shadow-lg transition-all duration-200
+                ${
+                  draggingIndex === index
+                    ? "scale-125 bg-[var(--accent-cyan-light)]/20 ring-4 ring-[var(--accent-cyan)]/30"
+                    : "hover:scale-110 hover:shadow-xl"
+                }
+              `}
+              style={{
+                width: HANDLE_SIZE,
+                height: HANDLE_SIZE,
+                left: (TOUCH_SIZE - HANDLE_SIZE) / 2,
+                top: (TOUCH_SIZE - HANDLE_SIZE) / 2,
+              }}
+            />
+          </div>
         ))}
 
         {/* 加载遮罩 */}
