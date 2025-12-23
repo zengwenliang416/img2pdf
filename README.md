@@ -20,6 +20,11 @@
 <div align="center">
   <img src="docs/images/web-ui-preview.png" alt="网页端界面预览" width="800" />
 </div>
+### 📹 工作流程演示
+
+<div align="center">
+  <img src="docs/images/img2pdf-workflow-demo.gif" alt="工作流程演示：上传 → 裁剪 → 滤镜 → 导出" width="800" />
+</div>
 
 <br/>
 
