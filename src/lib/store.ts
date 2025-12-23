@@ -67,8 +67,11 @@ export interface ImageItem {
   // 唯一标识
   id: string;
 
-  // 原始图片 Data URL
+  // 原始图片 Object URL（blob://）
   original: string;
+
+  // 原始文件引用（用于导出时读取原始数据）
+  file: File | null;
 
   // 原始图片尺寸
   size: { width: number; height: number };
@@ -149,7 +152,8 @@ interface AppActions {
   // 添加图片（支持多张）
   addImages: (
     items: Array<{
-      dataUrl: string;
+      objectUrl: string;
+      file: File;
       size: { width: number; height: number };
       thumbnail?: string | null;
     }>,
@@ -277,7 +281,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   /**
    * 添加图片（支持多张）
-   * 补齐 thumbnail/rotation/filter/orientation 默认值
+   * 使用 Object URL 替代 Base64 Data URL 以优化内存
    */
   addImages: (items) => {
     const defaultFilter = get().selectedFilter;
@@ -285,7 +289,8 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
     const newImages: ImageItem[] = items.map((item) => ({
       id: generateId(),
-      original: item.dataUrl,
+      original: item.objectUrl,
+      file: item.file,
       size: item.size,
       corners: null,
       cropped: null,
@@ -406,12 +411,27 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
   setError: (error) => set({ error, isLoading: false, loadingProgress: null }),
 
-  reset: () => set(initialState),
+  reset: () => {
+    // 释放所有 Object URL 防止内存泄漏
+    const { images } = get();
+    images.forEach((img) => {
+      if (img.original.startsWith("blob:")) {
+        URL.revokeObjectURL(img.original);
+      }
+    });
+    set(initialState);
+  },
 
   goBack: () => {
     const { step, images } = get();
     switch (step) {
       case "crop":
+        // 释放所有 Object URL 防止内存泄漏
+        images.forEach((img) => {
+          if (img.original.startsWith("blob:")) {
+            URL.revokeObjectURL(img.original);
+          }
+        });
         set({ ...initialState });
         break;
       case "filter":
@@ -504,6 +524,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
    * - 删除后为空：回到 initialState
    * - currentIndex：尽量保持"同一张 id"仍为当前；否则选一个合法 index
    * - selectedIds：同步移除已删除项
+   * - 释放被删除图片的 Object URL 防止内存泄漏
    */
   removeImagesById: (ids) =>
     set((state) => {
@@ -511,6 +532,15 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
 
       const idSet = new Set(ids);
       const currentId = state.images[state.currentIndex]?.id || null;
+
+      // 释放被删除图片的 Object URL
+      state.images
+        .filter((img) => idSet.has(img.id))
+        .forEach((img) => {
+          if (img.original.startsWith("blob:")) {
+            URL.revokeObjectURL(img.original);
+          }
+        });
 
       const images = state.images.filter((img) => !idSet.has(img.id));
       const selectedIds = state.selectedIds.filter((id) => !idSet.has(id));

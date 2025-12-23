@@ -23,12 +23,13 @@ export function ImageUpload() {
 
   /**
    * 处理单个文件
-   * 读取图片、获取尺寸并生成缩略图
+   * 使用 Object URL 替代 Base64 Data URL 优化内存
    */
   const processFile = async (
     file: File,
   ): Promise<{
-    dataUrl: string;
+    objectUrl: string;
+    file: File;
     size: { width: number; height: number };
     thumbnail: string;
   } | null> => {
@@ -42,15 +43,10 @@ export function ImageUpload() {
       return null;
     }
 
-    // 读取文件为 Data URL
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(new Error("读取文件失败"));
-      reader.readAsDataURL(file);
-    });
+    // 创建 Object URL（轻量级，不占用额外内存）
+    const objectUrl = URL.createObjectURL(file);
 
-    // 获取图片尺寸并生成缩略图（复用同一个 Image 对象）
+    // 获取图片尺寸并生成缩略图
     const { size, thumbnail } = await new Promise<{
       size: { width: number; height: number };
       thumbnail: string;
@@ -62,14 +58,19 @@ export function ImageUpload() {
           const thumbnail = generateThumbnailFromImage(img);
           resolve({ size, thumbnail });
         } catch (err) {
+          // 出错时释放 Object URL
+          URL.revokeObjectURL(objectUrl);
           reject(err);
         }
       };
-      img.onerror = () => reject(new Error("加载图片失败"));
-      img.src = dataUrl;
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("加载图片失败"));
+      };
+      img.src = objectUrl;
     });
 
-    return { dataUrl, size, thumbnail };
+    return { objectUrl, file, size, thumbnail };
   };
 
   /**
@@ -113,7 +114,8 @@ export function ImageUpload() {
           (
             r,
           ): r is {
-            dataUrl: string;
+            objectUrl: string;
+            file: File;
             size: { width: number; height: number };
             thumbnail: string;
           } => r !== null,

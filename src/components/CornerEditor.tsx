@@ -185,6 +185,14 @@ export function CornerEditor() {
     };
 
     loadImage();
+
+    // 清理函数：释放图片引用以便垃圾回收
+    return () => {
+      if (imageRef.current) {
+        imageRef.current.src = "";
+        imageRef.current = null;
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentImage?.id]);
 
