@@ -263,8 +263,10 @@ export function FilterPanel() {
     <div className="flex flex-col items-center gap-6 p-6 w-full max-w-2xl mx-auto">
       {/* 标题 */}
       <div className="text-center">
-        <h2 className="text-lg font-semibold text-gray-800">选择滤镜</h2>
-        <p className="text-sm text-gray-500">
+        <h2 className="text-lg font-semibold text-[var(--foreground)]">
+          选择滤镜
+        </h2>
+        <p className="text-sm text-[var(--neutral-500)]">
           {images.length > 1
             ? `当前编辑第 ${currentIndex + 1} 页，共 ${images.length} 页`
             : "选择最适合的效果"}
@@ -277,16 +279,16 @@ export function FilterPanel() {
         disabled={isLoading || isProcessing}
       />
 
-      {/* 预览图 */}
+      {/* 预览图 - 纸张悬浮效果 */}
       <div
-        className="relative rounded-lg overflow-hidden shadow-lg bg-gray-100 flex items-center justify-center"
+        className="relative rounded-2xl overflow-hidden scanner-paper bg-[var(--neutral-100)] flex items-center justify-center"
         style={{ width: previewWidth, height: previewHeight }}
       >
         {currentPreviewUrl ? (
           <img
             src={currentPreviewUrl}
             alt="预览"
-            className="object-contain transition-transform duration-200"
+            className="object-contain transition-transform duration-300"
             style={{
               // 90°/270° 旋转时，图片尺寸需要交换以适应旋转后的显示
               maxWidth: needSwapDimensions ? previewHeight : previewWidth,
@@ -296,13 +298,13 @@ export function FilterPanel() {
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-4 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
           </div>
         )}
 
-        {/* 图片计数 */}
+        {/* 图片计数 - 胶囊徽章 */}
         {images.length > 1 && (
-          <div className="absolute top-2 right-2 bg-black/60 text-white text-sm px-2 py-1 rounded">
+          <div className="absolute top-3 right-3 bg-[var(--foreground)]/70 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full">
             {currentIndex + 1} / {images.length}
           </div>
         )}
@@ -316,7 +318,7 @@ export function FilterPanel() {
         <button
           onClick={() => handleRotate("ccw")}
           disabled={isLoading || isProcessing}
-          className="flex items-center gap-2 px-5 py-3 rounded-xl border-2 border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-50 transition-all"
+          className="flex items-center gap-2 px-5 py-3 rounded-xl border-2 border-[var(--neutral-200)] text-[var(--neutral-700)] hover:bg-[var(--neutral-50)] hover:border-[var(--neutral-300)] disabled:opacity-50 transition-all duration-200"
           title="逆时针旋转 90°"
         >
           <svg
@@ -330,13 +332,13 @@ export function FilterPanel() {
           </svg>
           <span className="text-base font-medium">左转</span>
         </button>
-        <span className="text-base font-semibold text-gray-600 min-w-[3rem] text-center">
+        <span className="text-base font-semibold text-[var(--neutral-600)] min-w-[3rem] text-center">
           {currentImage?.rotation || 0}°
         </span>
         <button
           onClick={() => handleRotate("cw")}
           disabled={isLoading || isProcessing}
-          className="flex items-center gap-2 px-5 py-3 rounded-xl border-2 border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 disabled:opacity-50 transition-all"
+          className="flex items-center gap-2 px-5 py-3 rounded-xl border-2 border-[var(--neutral-200)] text-[var(--neutral-700)] hover:bg-[var(--neutral-50)] hover:border-[var(--neutral-300)] disabled:opacity-50 transition-all duration-200"
           title="顺时针旋转 90°"
         >
           <svg
@@ -353,23 +355,23 @@ export function FilterPanel() {
       </div>
 
       {/* 滤镜选择 */}
-      <div className="flex gap-4 overflow-x-auto py-3 px-2">
+      <div className="flex gap-4 overflow-x-auto py-3 px-2 custom-scrollbar">
         {AVAILABLE_FILTERS.map((filter) => (
           <button
             key={filter}
             onClick={() => handleSelectFilter(filter)}
             disabled={isLoading || isProcessing}
             className={`
-              flex flex-col items-center gap-2 p-3 rounded-xl transition-all
+              flex flex-col items-center gap-2 p-3 rounded-xl transition-all duration-200
               ${
                 currentFilter === filter
-                  ? "ring-3 ring-blue-500 bg-blue-50 shadow-md"
-                  : "hover:bg-gray-50 hover:shadow-sm"
+                  ? "ring-2 ring-[var(--primary)] bg-[var(--primary-50)] shadow-md"
+                  : "hover:bg-[var(--neutral-50)] hover:shadow-sm"
               }
               disabled:opacity-50
             `}
           >
-            <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-200 shadow-inner">
+            <div className="w-20 h-20 rounded-lg overflow-hidden bg-[var(--neutral-200)] shadow-inner">
               {filterPreviews[filter] ? (
                 <img
                   src={filterPreviews[filter]}
@@ -378,11 +380,11 @@ export function FilterPanel() {
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
-                  <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-5 h-5 border-2 border-[var(--neutral-400)] border-t-transparent rounded-full animate-spin" />
                 </div>
               )}
             </div>
-            <span className="text-sm font-medium text-gray-700">
+            <span className="text-sm font-medium text-[var(--neutral-700)]">
               {getFilterName(filter)}
             </span>
           </button>
@@ -394,7 +396,7 @@ export function FilterPanel() {
         <button
           onClick={handleApplyToAll}
           disabled={isLoading || isProcessing}
-          className="px-5 py-2.5 text-base font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl transition-colors disabled:opacity-50"
+          className="px-5 py-2.5 text-base font-medium text-[var(--primary)] hover:text-[var(--primary-700)] hover:bg-[var(--primary-50)] rounded-xl transition-colors duration-200 disabled:opacity-50"
         >
           将「{getFilterName(currentFilter)}」应用到所有页面
         </button>
@@ -402,7 +404,7 @@ export function FilterPanel() {
 
       {/* 页面方向选择 */}
       <div className="w-full max-w-md">
-        <label className="block text-base font-medium text-gray-700 mb-3 text-center">
+        <label className="block text-base font-medium text-[var(--neutral-700)] mb-3 text-center">
           当前页导出方向
         </label>
         <div className="grid grid-cols-2 gap-4">
@@ -410,11 +412,11 @@ export function FilterPanel() {
             onClick={() => handleSelectOrientation("portrait")}
             disabled={isLoading || isProcessing}
             className={`
-              flex items-center justify-center gap-3 px-5 py-4 rounded-xl border-2 transition-all
+              flex items-center justify-center gap-3 px-5 py-4 rounded-xl border-2 transition-all duration-200
               ${
                 currentImage?.orientation === "portrait"
-                  ? "border-blue-500 bg-blue-50 text-blue-700 shadow-md"
-                  : "border-gray-200 text-gray-700 hover:border-gray-300 hover:shadow-sm"
+                  ? "border-[var(--primary)] bg-[var(--primary-50)] text-[var(--primary-700)] shadow-md"
+                  : "border-[var(--neutral-200)] text-[var(--neutral-700)] hover:border-[var(--neutral-300)] hover:shadow-sm"
               }
               disabled:opacity-50
             `}
@@ -437,11 +439,11 @@ export function FilterPanel() {
             onClick={() => handleSelectOrientation("landscape")}
             disabled={isLoading || isProcessing}
             className={`
-              flex items-center justify-center gap-3 px-5 py-4 rounded-xl border-2 transition-all
+              flex items-center justify-center gap-3 px-5 py-4 rounded-xl border-2 transition-all duration-200
               ${
                 currentImage?.orientation === "landscape"
-                  ? "border-blue-500 bg-blue-50 text-blue-700 shadow-md"
-                  : "border-gray-200 text-gray-700 hover:border-gray-300 hover:shadow-sm"
+                  ? "border-[var(--primary)] bg-[var(--primary-50)] text-[var(--primary-700)] shadow-md"
+                  : "border-[var(--neutral-200)] text-[var(--neutral-700)] hover:border-[var(--neutral-300)] hover:shadow-sm"
               }
               disabled:opacity-50
             `}
@@ -466,7 +468,7 @@ export function FilterPanel() {
           <button
             onClick={handleApplyOrientationToAll}
             disabled={isLoading || isProcessing}
-            className="w-full mt-3 px-5 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl transition-colors disabled:opacity-50"
+            className="w-full mt-3 px-5 py-2 text-sm font-medium text-[var(--primary)] hover:text-[var(--primary-700)] hover:bg-[var(--primary-50)] rounded-xl transition-colors duration-200 disabled:opacity-50"
           >
             将「{currentImage?.orientation === "portrait" ? "纵向" : "横向"}
             」应用到所有页面

@@ -48,6 +48,22 @@
   --info: #3b82f6;
   --info-light: #dbeafe;
 
+  /* ===== 强调色 - 青色系（裁剪引导线） ===== */
+  --accent-cyan: #06b6d4;
+  --accent-cyan-light: #22d3ee;
+  --accent-cyan-dark: #0891b2;
+
+  /* ===== 玻璃态效果 ===== */
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-bg-strong: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.4);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+
+  /* ===== 纸张悬浮阴影 ===== */
+  --shadow-paper: 0 20px 50px -12px rgba(0, 0, 0, 0.25);
+  --shadow-paper-hover: 0 25px 60px -10px rgba(0, 0, 0, 0.3);
+  --shadow-float: 0 12px 40px -8px rgba(0, 0, 0, 0.15);
+
   /* ===== 边框 ===== */
   --border-color: var(--neutral-200);
   --border-color-hover: var(--neutral-300);
@@ -140,6 +156,11 @@ body {
     Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* 微网格背景 - 增加高级感 */
+  background-image:
+    radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.06) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.04) 0px, transparent 50%);
+  background-attachment: fixed;
 }
 
 /* ===== 工具类 ===== */
@@ -180,6 +201,56 @@ body {
 .btn-secondary:hover {
   background: var(--background-secondary);
   border-color: var(--border-color-hover);
+}
+
+/* ===== 玻璃态效果 ===== */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-panel-strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+/* ===== 纸张悬浮效果 ===== */
+.scanner-paper {
+  box-shadow: var(--shadow-paper);
+  border: 0.5px solid var(--neutral-200);
+  transition: box-shadow var(--transition-normal);
+}
+
+.scanner-paper:hover {
+  box-shadow: var(--shadow-paper-hover);
+}
+
+/* ===== 高级按钮效果 ===== */
+.btn-premium {
+  background: linear-gradient(
+    135deg,
+    var(--primary-500) 0%,
+    var(--primary-600) 100%
+  );
+  color: white;
+  border-radius: var(--radius-xl);
+  transition: all var(--transition-normal);
+  box-shadow: 0 4px 14px rgba(59, 130, 246, 0.3);
+}
+
+.btn-premium:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+}
+
+.btn-premium:active {
+  transform: translateY(0) scale(0.98);
 }
 
 .input-field {
@@ -233,6 +304,42 @@ body {
   }
   100% {
     background-position: 200% 0;
+  }
+}
+
+@keyframes scanner-light {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes glow-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(59, 130, 246, 0.5);
+  }
+}
+
+@keyframes border-flow {
+  0% {
+    stroke-dashoffset: 100;
+  }
+  100% {
+    stroke-dashoffset: 0;
   }
 }
 
@@ -318,6 +425,14 @@ body {
 
 .animate-shake {
   animation: shake 0.5s ease-in-out;
+}
+
+.animate-scanner-light {
+  animation: scanner-light 2s ease-in-out infinite;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
 }
 
 /* ===== 交互状态样式 ===== */

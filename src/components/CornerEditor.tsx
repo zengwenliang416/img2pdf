@@ -237,9 +237,9 @@ export function CornerEditor() {
     ctx.drawImage(img, 0, 0, displaySize.width, displaySize.height);
     ctx.restore();
 
-    // 绘制边框
-    ctx.strokeStyle = "#3B82F6";
-    ctx.lineWidth = 2;
+    // 绘制边框 - 使用青色强调色
+    ctx.strokeStyle = "#06b6d4";
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
     ctx.moveTo(scaledCorners[0].x, scaledCorners[0].y);
     for (let i = 1; i < scaledCorners.length; i++) {
@@ -444,10 +444,14 @@ export function CornerEditor() {
     >
       {/* 标题和图片导航 */}
       <div className="text-center">
-        <h2 className="text-lg font-semibold text-gray-800">调整文档边界</h2>
-        <p className="text-sm text-gray-500">拖动四角调整裁剪区域</p>
+        <h2 className="text-lg font-semibold text-[var(--foreground)]">
+          调整文档边界
+        </h2>
+        <p className="text-sm text-[var(--neutral-500)]">
+          拖动四角调整裁剪区域
+        </p>
         {images.length > 1 && (
-          <p className="text-sm text-blue-600 mt-1">
+          <p className="text-sm text-[var(--primary)] font-medium mt-1">
             第 {currentIndex + 1} / {images.length} 张
           </p>
         )}
@@ -455,7 +459,7 @@ export function CornerEditor() {
 
       {/* 多图缩略图导航 */}
       {images.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto py-2 px-1 max-w-full">
+        <div className="flex gap-2 overflow-x-auto py-2 px-1 max-w-full custom-scrollbar">
           {images.map((img, index) => (
             <button
               key={img.id}
@@ -464,35 +468,38 @@ export function CornerEditor() {
                 setCurrentIndex(index);
               }}
               className={`
-                relative flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden border-2
+                relative flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden border-2
+                transition-all duration-200
                 ${
                   index === currentIndex
-                    ? "border-blue-500 ring-2 ring-blue-200"
-                    : "border-gray-200 hover:border-gray-400"
+                    ? "border-[var(--primary)] ring-2 ring-[var(--primary-200)] scale-105"
+                    : "border-[var(--neutral-200)] hover:border-[var(--neutral-400)] hover:scale-102"
                 }
-                ${img.cropped ? "opacity-50" : ""}
+                ${img.cropped ? "opacity-60" : ""}
               `}
             >
               <img
-                src={img.original}
+                src={img.thumbnail || img.original}
                 alt={`图片 ${index + 1}`}
                 className="w-full h-full object-cover"
               />
               {img.cropped && (
-                <div className="absolute inset-0 bg-green-500/30 flex items-center justify-center">
-                  <svg
-                    className="w-6 h-6 text-green-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={3}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
+                <div className="absolute inset-0 bg-[var(--success)]/20 flex items-center justify-center backdrop-blur-[1px]">
+                  <div className="w-6 h-6 rounded-full bg-[var(--success)] flex items-center justify-center">
+                    <svg
+                      className="w-3.5 h-3.5 text-white"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={3}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  </div>
                 </div>
               )}
             </button>
@@ -510,16 +517,20 @@ export function CornerEditor() {
         onTouchMove={handleDrag}
         onTouchEnd={handleDragEnd}
       >
-        <canvas ref={canvasRef} className="rounded-lg shadow-lg" />
+        <canvas ref={canvasRef} className="rounded-2xl scanner-paper" />
 
-        {/* 角点手柄 */}
+        {/* 角点手柄 - 青色高可见引导线 */}
         {scaledCorners?.map((point, index) => (
           <div
             key={index}
             className={`
-              absolute rounded-full bg-white border-2 border-blue-500
-              shadow-md cursor-move transition-transform
-              ${draggingIndex === index ? "scale-125 bg-blue-100" : "hover:scale-110"}
+              absolute rounded-full bg-white border-[3px] border-[var(--accent-cyan)]
+              shadow-lg cursor-move transition-all duration-200
+              ${
+                draggingIndex === index
+                  ? "scale-125 bg-[var(--accent-cyan-light)]/20 ring-4 ring-[var(--accent-cyan)]/30"
+                  : "hover:scale-110 hover:shadow-xl"
+              }
             `}
             style={{
               width: HANDLE_SIZE,
@@ -562,22 +573,24 @@ export function CornerEditor() {
         </Button>
 
         {showSizeEditor && (
-          <div className="mt-3 p-3 bg-gray-50 rounded-lg space-y-3">
+          <div className="mt-3 p-4 bg-[var(--neutral-50)] rounded-xl border border-[var(--neutral-200)] space-y-3">
             <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2">
+              <label className="flex items-center gap-2 cursor-pointer group">
                 <input
                   type="checkbox"
                   checked={keepAspectRatio}
                   onChange={(e) => setKeepAspectRatio(e.target.checked)}
-                  className="rounded text-blue-500"
+                  className="w-4 h-4 rounded border-[var(--neutral-300)] text-[var(--primary)] focus:ring-[var(--primary-200)] focus:ring-2"
                 />
-                <span className="text-sm text-gray-600">保持比例</span>
+                <span className="text-sm text-[var(--neutral-600)] group-hover:text-[var(--foreground)] transition-colors">
+                  保持比例
+                </span>
               </label>
             </div>
 
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className="block text-xs text-gray-500 mb-1">
+                <label className="block text-xs text-[var(--neutral-500)] mb-1.5 font-medium">
                   宽度 (px)
                 </label>
                 <input
@@ -586,12 +599,14 @@ export function CornerEditor() {
                   onChange={(e) =>
                     handleWidthChange(parseInt(e.target.value) || 0)
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  className="w-full px-3 py-2 border border-[var(--neutral-300)] rounded-lg text-sm
+                    bg-white focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary-100)]
+                    transition-all duration-200 outline-none"
                   min={1}
                 />
               </div>
               <div className="flex-1">
-                <label className="block text-xs text-gray-500 mb-1">
+                <label className="block text-xs text-[var(--neutral-500)] mb-1.5 font-medium">
                   高度 (px)
                 </label>
                 <input
@@ -600,7 +615,9 @@ export function CornerEditor() {
                   onChange={(e) =>
                     handleHeightChange(parseInt(e.target.value) || 0)
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                  className="w-full px-3 py-2 border border-[var(--neutral-300)] rounded-lg text-sm
+                    bg-white focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary-100)]
+                    transition-all duration-200 outline-none"
                   min={1}
                 />
               </div>

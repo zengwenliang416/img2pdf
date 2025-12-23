@@ -181,77 +181,131 @@ export function ImageUpload() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 animate-fade-in">
-      {/* 上传卡片 */}
+      {/* 上传卡片 - 高级"着陆台"设计 */}
       <div
         onClick={handleClick}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={`
-          relative w-full max-w-md aspect-[3/4] rounded-2xl
-          flex flex-col items-center justify-center gap-5 cursor-pointer
-          transition-all duration-300 ease-out
-          bg-[var(--card-bg)] border-2 border-dashed
+          group relative w-full max-w-md aspect-[3/4] rounded-3xl
+          flex flex-col items-center justify-center cursor-pointer
+          transition-all duration-500 ease-out overflow-hidden
           ${
             isDragging
-              ? "border-[var(--primary)] bg-[var(--primary-50)] scale-[1.02] shadow-[var(--shadow-primary)]"
-              : "border-[var(--neutral-300)] hover:border-[var(--primary-400)] hover:shadow-[var(--shadow-lg)]"
+              ? "scale-[1.02] ring-4 ring-[var(--primary-300)]"
+              : "hover:scale-[1.01] hover:-translate-y-2"
           }
-          ${isLoading ? "pointer-events-none opacity-60" : ""}
+          ${isLoading ? "pointer-events-none" : ""}
         `}
         style={{
-          boxShadow: isDragging ? undefined : "var(--shadow-md)",
+          background: isDragging
+            ? "linear-gradient(180deg, var(--primary-50) 0%, white 100%)"
+            : "linear-gradient(180deg, rgba(248,250,252,0.8) 0%, white 100%)",
+          boxShadow: isDragging
+            ? "var(--shadow-paper-hover), 0 0 60px rgba(59,130,246,0.15)"
+            : "var(--shadow-float)",
         }}
       >
-        {/* 背景装饰 */}
-        <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+        {/* 动态边框 SVG */}
+        <svg
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          preserveAspectRatio="none"
+        >
+          <rect
+            x="8"
+            y="8"
+            width="calc(100% - 16px)"
+            height="calc(100% - 16px)"
+            rx="20"
+            fill="none"
+            stroke={isDragging ? "var(--primary-400)" : "var(--neutral-300)"}
+            strokeWidth="2"
+            strokeDasharray="12 8"
+            className={`transition-all duration-500 ${
+              isDragging
+                ? "opacity-100"
+                : "opacity-60 group-hover:opacity-100 group-hover:stroke-[var(--primary-400)]"
+            }`}
+            style={{
+              strokeDashoffset: isDragging ? 0 : undefined,
+            }}
+          />
+        </svg>
+
+        {/* 背景装饰光晕 */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-3xl">
           <div
             className={`
-              absolute -top-20 -right-20 w-40 h-40 rounded-full
-              bg-[var(--primary-100)] opacity-50 blur-3xl
-              transition-opacity duration-500
-              ${isDragging ? "opacity-80" : "opacity-30"}
+              absolute -top-32 -right-32 w-64 h-64 rounded-full
+              bg-gradient-to-br from-[var(--primary-200)] to-[var(--primary-100)]
+              transition-all duration-700 ease-out blur-3xl
+              ${isDragging ? "opacity-60 scale-110" : "opacity-20 group-hover:opacity-40"}
             `}
           />
           <div
             className={`
-              absolute -bottom-20 -left-20 w-40 h-40 rounded-full
-              bg-[var(--primary-200)] opacity-50 blur-3xl
-              transition-opacity duration-500
-              ${isDragging ? "opacity-60" : "opacity-20"}
+              absolute -bottom-32 -left-32 w-64 h-64 rounded-full
+              bg-gradient-to-tr from-[var(--accent-cyan)] to-[var(--primary-200)]
+              transition-all duration-700 ease-out blur-3xl
+              ${isDragging ? "opacity-40 scale-110" : "opacity-10 group-hover:opacity-25"}
             `}
           />
+          {/* 扫描光效果 - 仅在加载时显示 */}
+          {isLoading && (
+            <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-[var(--primary)] to-transparent animate-scanner-light" />
+          )}
         </div>
 
         {/* 内容区域 */}
-        <div className="relative z-10 flex flex-col items-center gap-5">
+        <div className="relative z-10 flex flex-col items-center gap-6 px-8">
           {isLoading ? (
             <>
-              <div className="relative">
-                <div className="w-16 h-16 border-4 border-[var(--primary-200)] rounded-full" />
-                <div className="absolute inset-0 w-16 h-16 border-4 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+              {/* 加载动画 */}
+              <div className="relative w-24 h-24">
+                <div className="absolute inset-0 rounded-full border-4 border-[var(--primary-100)]" />
+                <div className="absolute inset-0 rounded-full border-4 border-[var(--primary)] border-t-transparent animate-spin" />
+                <div className="absolute inset-3 rounded-full bg-white/80 backdrop-blur flex items-center justify-center">
+                  <svg
+                    className="w-8 h-8 text-[var(--primary)]"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={1.5}
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                </div>
               </div>
-              <p className="text-[var(--neutral-600)] font-medium">
-                正在加载图片...
-              </p>
+              <div className="text-center space-y-1">
+                <p className="text-lg font-semibold text-[var(--foreground)]">
+                  正在处理图片
+                </p>
+                <p className="text-sm text-[var(--neutral-500)]">请稍候...</p>
+              </div>
             </>
           ) : (
             <>
-              {/* 图标容器 */}
+              {/* 图标容器 - 悬浮效果 */}
               <div
                 className={`
-                  relative w-20 h-20 rounded-2xl
-                  bg-gradient-to-br from-[var(--primary-100)] to-[var(--primary-200)]
-                  flex items-center justify-center
-                  transition-transform duration-300
-                  ${isDragging ? "scale-110 rotate-3" : ""}
+                  relative p-6 rounded-2xl
+                  bg-white shadow-lg
+                  transition-all duration-500 ease-out
+                  group-hover:shadow-xl group-hover:-translate-y-1
+                  ${isDragging ? "scale-110 -translate-y-2 shadow-2xl bg-[var(--primary-50)]" : ""}
                 `}
               >
+                {/* 相机/扫描图标 */}
                 <svg
                   className={`
-                    w-10 h-10 text-[var(--primary)]
-                    transition-transform duration-300
-                    ${isDragging ? "scale-110" : ""}
+                    w-12 h-12 text-[var(--primary)]
+                    transition-all duration-500
+                    ${isDragging ? "scale-110 text-[var(--primary-600)]" : "group-hover:scale-105"}
                   `}
                   fill="none"
                   stroke="currentColor"
@@ -261,18 +315,25 @@ export function ImageUpload() {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={1.5}
-                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
                   />
                 </svg>
-                {/* 上传箭头指示 */}
+
+                {/* 上传指示徽章 */}
                 <div
                   className={`
                     absolute -top-2 -right-2 w-8 h-8 rounded-full
-                    bg-[var(--primary)] text-white
-                    flex items-center justify-center
-                    shadow-[var(--shadow-md)]
-                    transition-transform duration-300
-                    ${isDragging ? "scale-125 -translate-y-1" : ""}
+                    bg-gradient-to-br from-[var(--primary)] to-[var(--primary-600)]
+                    text-white flex items-center justify-center
+                    shadow-lg shadow-[var(--primary)]/30
+                    transition-all duration-300
+                    ${isDragging ? "scale-125 -translate-y-1 animate-bounce-subtle" : "group-hover:scale-110"}
                   `}
                 >
                   <svg
@@ -284,7 +345,7 @@ export function ImageUpload() {
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      strokeWidth={2}
+                      strokeWidth={2.5}
                       d="M12 4v16m0-16l-4 4m4-4l4 4"
                     />
                   </svg>
@@ -292,19 +353,27 @@ export function ImageUpload() {
               </div>
 
               {/* 文字说明 */}
-              <div className="text-center space-y-2">
-                <p className="text-lg font-semibold text-[var(--foreground)]">
-                  {isDragging ? "松开以上传图片" : "点击或拖拽上传图片"}
-                </p>
+              <div className="text-center space-y-3">
+                <h3
+                  className={`
+                    text-xl font-semibold transition-colors duration-300
+                    ${isDragging ? "text-[var(--primary-600)]" : "text-[var(--neutral-800)] group-hover:text-[var(--primary-600)]"}
+                  `}
+                >
+                  {isDragging ? "松开以上传" : "扫描文档"}
+                </h3>
                 <p className="text-sm text-[var(--neutral-500)]">
-                  支持 JPG、PNG、WebP 格式，可多选
-                </p>
-                <div className="flex items-center justify-center gap-2 text-xs text-[var(--neutral-400)]">
-                  <span className="px-2 py-0.5 rounded-full bg-[var(--neutral-100)]">
-                    最多 {MAX_FILES} 张
+                  拖放图片或{" "}
+                  <span className="text-[var(--primary)] font-medium underline decoration-[var(--primary-200)] underline-offset-2 decoration-2">
+                    点击浏览
                   </span>
-                  <span className="px-2 py-0.5 rounded-full bg-[var(--neutral-100)]">
-                    每张 ≤ 20MB
+                </p>
+                <div className="flex items-center justify-center gap-3 text-xs">
+                  <span className="px-3 py-1 rounded-full bg-[var(--neutral-100)] text-[var(--neutral-600)] font-medium">
+                    JPG / PNG / WebP
+                  </span>
+                  <span className="px-3 py-1 rounded-full bg-[var(--neutral-100)] text-[var(--neutral-600)] font-medium">
+                    最多 {MAX_FILES} 张
                   </span>
                 </div>
               </div>
@@ -322,22 +391,26 @@ export function ImageUpload() {
         className="hidden"
       />
 
-      {/* 隐私提示 */}
-      <div className="mt-8 flex items-center gap-2 text-sm text-[var(--neutral-500)]">
-        <svg
-          className="w-4 h-4 text-[var(--success)]"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-          />
-        </svg>
-        <span>所有处理均在本地完成，您的图片不会上传到服务器</span>
+      {/* 隐私提示 - 更精致 */}
+      <div className="mt-10 flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-[var(--success-light)]/50 border border-[var(--success)]/20">
+        <div className="w-5 h-5 rounded-full bg-[var(--success)] flex items-center justify-center">
+          <svg
+            className="w-3 h-3 text-white"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={3}
+              d="M5 13l4 4L19 7"
+            />
+          </svg>
+        </div>
+        <span className="text-sm text-[var(--neutral-700)] font-medium">
+          本地处理 · 隐私安全
+        </span>
       </div>
     </div>
   );

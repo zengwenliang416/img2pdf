@@ -19,20 +19,19 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-[var(--background)]">
-      {/* 顶部导航栏 */}
-      <header
-        className="sticky top-0 z-50 bg-[var(--card-bg)]/95 backdrop-blur-md border-b border-[var(--border-color)]"
-        style={{ boxShadow: "var(--shadow-sm)" }}
-      >
-        <div className="max-w-2xl mx-auto px-4 h-16 flex items-center justify-between">
-          {/* Logo */}
+      {/* 顶部导航栏 - 高级玻璃态效果 */}
+      <header className="sticky top-0 z-50 glass-panel-strong border-b border-[var(--glass-border)]">
+        <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
+          {/* Logo - 高级悬浮效果 */}
           <button
             onClick={reset}
-            className="flex items-center gap-2.5 group transition-transform duration-200 hover:scale-105"
+            className="flex items-center gap-2.5 group transition-all duration-300 hover:-translate-y-0.5"
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--primary-600)] flex items-center justify-center shadow-[var(--shadow-sm)] group-hover:shadow-[var(--shadow-primary)] transition-shadow duration-200">
+            <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--primary-700)] flex items-center justify-center shadow-lg group-hover:shadow-[0_8px_24px_rgba(59,130,246,0.35)] transition-all duration-300">
+              {/* Logo 光晕效果 */}
+              <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/20 to-transparent" />
               <svg
-                className="w-5 h-5 text-white"
+                className="relative w-5 h-5 text-white"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -45,7 +44,7 @@ export default function Home() {
                 />
               </svg>
             </div>
-            <span className="font-semibold text-[var(--foreground)] hidden sm:inline">
+            <span className="font-semibold text-[var(--foreground)] hidden sm:inline tracking-tight">
               扫描全能王
             </span>
           </button>
@@ -146,24 +145,26 @@ export default function Home() {
         )}
       </main>
 
-      {/* 底部版权信息 */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-[var(--card-bg)]/90 backdrop-blur-md border-t border-[var(--border-color)]">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-center gap-2">
-          <svg
-            className="w-3.5 h-3.5 text-[var(--success)]"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-            />
-          </svg>
-          <p className="text-xs text-[var(--neutral-500)]">
-            所有处理均在本地完成，您的文档不会上传到任何服务器
+      {/* 底部隐私信息 - 极简悬浮式 */}
+      <footer className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40">
+        <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-[var(--card-bg)]/80 backdrop-blur-lg border border-[var(--glass-border)] shadow-lg">
+          <div className="w-5 h-5 rounded-full bg-[var(--success)]/10 flex items-center justify-center">
+            <svg
+              className="w-3 h-3 text-[var(--success)]"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.5}
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          </div>
+          <p className="text-xs text-[var(--neutral-600)] font-medium">
+            本地处理 · 隐私安全
           </p>
         </div>
       </footer>
