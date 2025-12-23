@@ -4,6 +4,7 @@
  */
 
 import { ensureOpenCV } from "./ensureOpenCV";
+import { edgeLogger as log } from "../utils/logger";
 
 /**
  * 表示一个点的坐标
@@ -78,7 +79,7 @@ export async function detectDocumentEdges(
   imageSource: HTMLCanvasElement | HTMLImageElement,
   config: DetectConfig = {},
 ): Promise<Corners | null> {
-  console.log("[EdgeDetect] 开始边缘检测...");
+  log.debug("开始边缘检测...");
   const { cv } = await ensureOpenCV();
   const cfg = { ...DEFAULT_CONFIG, ...config };
 
@@ -88,34 +89,34 @@ export async function detectDocumentEdges(
 
   try {
     // 1. 读取图像
-    console.log("[EdgeDetect] 读取图像...");
+    log.debug("读取图像...");
     const src = cv.imread(imageSource);
     mats.push(src);
-    console.log("[EdgeDetect] 图像尺寸:", src.cols, "x", src.rows);
+    log.debug("图像尺寸:", src.cols, "x", src.rows);
 
     const imageArea = src.rows * src.cols;
     const minContourArea = imageArea * cfg.minAreaRatio;
 
     // 2. 转换为灰度图
-    console.log("[EdgeDetect] 转换灰度图...");
+    log.debug("转换灰度图...");
     const gray = new cv.Mat();
     mats.push(gray);
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
     // 3. 高斯模糊降噪
-    console.log("[EdgeDetect] 高斯模糊...");
+    log.debug("高斯模糊...");
     const blurred = new cv.Mat();
     mats.push(blurred);
     cv.GaussianBlur(gray, blurred, new cv.Size(cfg.blurSize, cfg.blurSize), 0);
 
     // 4. Canny 边缘检测
-    console.log("[EdgeDetect] Canny 边缘检测...");
+    log.debug("Canny 边缘检测...");
     const edges = new cv.Mat();
     mats.push(edges);
     cv.Canny(blurred, edges, cfg.cannyLow, cfg.cannyHigh);
 
     // 5. 形态学闭操作，连接断开的边缘
-    console.log("[EdgeDetect] 形态学操作...");
+    log.debug("形态学操作...");
     const kernel = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(3, 3));
     mats.push(kernel);
     const closed = new cv.Mat();
@@ -123,7 +124,7 @@ export async function detectDocumentEdges(
     cv.morphologyEx(edges, closed, cv.MORPH_CLOSE, kernel);
 
     // 6. 查找轮廓
-    console.log("[EdgeDetect] 查找轮廓...");
+    log.debug("查找轮廓...");
     const contours = new cv.MatVector();
     const hierarchy = new cv.Mat();
     mats.push(hierarchy);
@@ -136,7 +137,7 @@ export async function detectDocumentEdges(
     );
 
     // 7. 按面积排序，找最大的四边形轮廓
-    console.log("[EdgeDetect] 找到轮廓数量:", contours.size());
+    log.debug("找到轮廓数量:", contours.size());
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const contourInfos: { index: number; area: number; contour: any }[] = [];
 
@@ -177,11 +178,11 @@ export async function detectDocumentEdges(
     }
 
     // 未找到四边形，清理并返回 null
-    console.log("[EdgeDetect] 未找到四边形");
+    log.debug("未找到四边形");
     contours.delete();
     return null;
   } finally {
-    console.log("[EdgeDetect] 清理资源...");
+    log.debug("清理资源...");
     // 释放所有 Mat 对象
     for (const mat of mats) {
       mat.delete();

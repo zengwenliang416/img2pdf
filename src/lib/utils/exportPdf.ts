@@ -6,6 +6,7 @@
 
 import { PDFDocument } from "pdf-lib";
 import JSZip from "jszip";
+import { exportLogger as log } from "./logger";
 
 /**
  * 导出配置
@@ -92,8 +93,8 @@ async function compressImage(
       const canvasWidth = needSwap ? imgHeight : imgWidth;
       const canvasHeight = needSwap ? imgWidth : imgHeight;
 
-      console.log(
-        `[ExportPdf] 压缩图片: 原始尺寸 ${imgWidth}x${imgHeight}, 输出尺寸 ${canvasWidth}x${canvasHeight}, 旋转 ${rotation}°`,
+      log.debug(
+        `压缩图片: 原始尺寸 ${imgWidth}x${imgHeight}, 输出尺寸 ${canvasWidth}x${canvasHeight}, 旋转 ${rotation}°`,
       );
 
       const canvas = document.createElement("canvas");
@@ -245,10 +246,10 @@ export async function exportToPdf(
     const effectiveDpiY = (image.height / drawHeight) * 72;
     const effectiveDpi = Math.min(effectiveDpiX, effectiveDpiY);
 
-    console.log(
-      `[ExportPdf] 页面 ${i + 1}: 图片像素 ${image.width}x${image.height}, ` +
+    log.debug(
+      `页面 ${i + 1}: 图片像素 ${image.width}x${image.height}, ` +
         `PDF绘制尺寸 ${drawWidth.toFixed(1)}x${drawHeight.toFixed(1)}pt, ` +
-        `有效DPI: ${effectiveDpi.toFixed(0)} (${effectiveDpi >= 150 ? "✓ 高质量" : effectiveDpi >= 72 ? "⚠ 中等" : "✗ 低质量"})`,
+        `有效DPI: ${effectiveDpi.toFixed(0)} (${effectiveDpi >= 150 ? "高质量" : effectiveDpi >= 72 ? "中等" : "低质量"})`,
     );
 
     // 添加页面（使用实际方向的页面尺寸）

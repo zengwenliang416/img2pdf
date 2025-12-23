@@ -4,6 +4,8 @@
  * 使用纯 Canvas API 实现，避免 OpenCV 阻塞主线程
  */
 
+import { filterLogger as log } from "../utils/logger";
+
 /**
  * 滤镜类型
  */
@@ -50,7 +52,7 @@ export async function applyFilter(
   filterType: FilterType,
   config: FilterConfig = {},
 ): Promise<string> {
-  console.log("[Filter] 应用滤镜:", filterType);
+  log.debug("应用滤镜:", filterType);
 
   // 原图直接返回
   if (filterType === "original") {
@@ -112,7 +114,7 @@ export async function applyFilter(
       throw new Error(`未知的滤镜类型: ${filterType}`);
   }
 
-  console.log("[Filter] 滤镜处理完成:", filterType);
+  log.debug("滤镜处理完成:", filterType);
   return canvas.toDataURL("image/png");
 }
 

@@ -8,7 +8,7 @@ import {
   useAppStore,
   PAPER_SIZES,
   type PageOrientation,
-  type ImageItem,
+  type Rotation,
 } from "@/lib/store";
 import {
   exportToPdf,
@@ -16,6 +16,7 @@ import {
   exportToZip,
   downloadBlob,
 } from "@/lib/utils/exportPdf";
+import { exportLogger as log } from "@/lib/utils/logger";
 
 interface UseExportOptions {
   // 预览 URL Map（图片 ID -> 预览 URL）
@@ -51,7 +52,7 @@ export function useExport({ previewUrls }: UseExportOptions) {
         ): item is {
           url: string;
           orientation: PageOrientation;
-          rotation: number;
+          rotation: Rotation;
         } => item.url !== undefined,
       );
 
@@ -84,7 +85,7 @@ export function useExport({ previewUrls }: UseExportOptions) {
       const filename = `scan_${new Date().toISOString().slice(0, 10)}.pdf`;
       downloadBlob(blob, filename);
     } catch (err) {
-      console.error("导出 PDF 失败:", err);
+      log.error("导出 PDF 失败:", err);
       setError(err instanceof Error ? err.message : "导出 PDF 失败");
     } finally {
       setLoading(false);
@@ -118,7 +119,7 @@ export function useExport({ previewUrls }: UseExportOptions) {
       const filename = `scan_${new Date().toISOString().slice(0, 10)}${suffix}.jpg`;
       downloadBlob(blob, filename);
     } catch (err) {
-      console.error("导出 JPG 失败:", err);
+      log.error("导出 JPG 失败:", err);
       setError(err instanceof Error ? err.message : "导出 JPG 失败");
     } finally {
       setLoading(false);
@@ -144,7 +145,7 @@ export function useExport({ previewUrls }: UseExportOptions) {
         rotation: img.rotation,
       }))
       .filter(
-        (item): item is { url: string; rotation: number } =>
+        (item): item is { url: string; rotation: Rotation } =>
           item.url !== undefined,
       );
 
@@ -168,7 +169,7 @@ export function useExport({ previewUrls }: UseExportOptions) {
       const filename = `scan_${new Date().toISOString().slice(0, 10)}.zip`;
       downloadBlob(blob, filename);
     } catch (err) {
-      console.error("导出 ZIP 失败:", err);
+      log.error("导出 ZIP 失败:", err);
       setError(err instanceof Error ? err.message : "导出 ZIP 失败");
     } finally {
       setLoading(false);

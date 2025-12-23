@@ -17,6 +17,9 @@ import {
   type Point,
 } from "@/lib/opencv";
 import { useSizeEditor } from "@/hooks";
+import { cornerLogger as log } from "@/lib/utils/logger";
+import { ProgressOverlay } from "./ProgressOverlay";
+import { Button } from "./ui";
 
 // 角点拖拽手柄大小
 const HANDLE_SIZE = 24;
@@ -43,7 +46,6 @@ export function CornerEditor() {
     finishCrop,
     removeImage,
     isLoading,
-    loadingMessage,
   } = useAppStore();
 
   // 当前图片
@@ -148,7 +150,7 @@ export function CornerEditor() {
               setCorners(defaultCorners);
             }
           } catch (detectError) {
-            console.warn("边缘检测失败，使用默认角点:", detectError);
+            log.warn("边缘检测失败，使用默认角点:", detectError);
             // 检测出错，使用默认角点
             const defaultCorners = getDefaultCorners(
               currentImage.size.width,
@@ -166,7 +168,7 @@ export function CornerEditor() {
           setSizeFromCorners(size.width, size.height);
         }
       } catch (err) {
-        console.error("加载图片失败:", err);
+        log.error("加载图片失败:", err);
         setError(err instanceof Error ? err.message : "加载图片失败");
 
         if (currentImage.size) {
@@ -355,7 +357,7 @@ export function CornerEditor() {
       // 进入下一张或滤镜步骤
       finishCrop();
     } catch (err) {
-      console.error("透视变换失败:", err);
+      log.error("透视变换失败:", err);
       setError(err instanceof Error ? err.message : "图片处理失败");
     } finally {
       setLoading(false);
@@ -412,7 +414,7 @@ export function CornerEditor() {
         setCorners(defaultCorners);
       }
     } catch (err) {
-      console.error("边缘检测失败:", err);
+      log.error("边缘检测失败:", err);
       setError("边缘检测失败，请手动调整角点");
     } finally {
       setLoading(false);
@@ -531,35 +533,33 @@ export function CornerEditor() {
         ))}
 
         {/* 加载遮罩 */}
-        {isLoading && (
-          <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center rounded-lg">
-            <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin" />
-            <p className="mt-2 text-white text-sm">{loadingMessage}</p>
-          </div>
-        )}
+        <ProgressOverlay type="opencv" />
       </div>
 
       {/* 输出尺寸调整 */}
       <div className="w-full max-w-md">
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setShowSizeEditor(!showSizeEditor)}
-          className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600"
+          leftIcon={
+            <svg
+              className={`w-4 h-4 transition-transform ${showSizeEditor ? "rotate-90" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          }
         >
-          <svg
-            className={`w-4 h-4 transition-transform ${showSizeEditor ? "rotate-90" : ""}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 5l7 7-7 7"
-            />
-          </svg>
           调整输出尺寸
-        </button>
+        </Button>
 
         {showSizeEditor && (
           <div className="mt-3 p-3 bg-gray-50 rounded-lg space-y-3">
@@ -609,13 +609,15 @@ export function CornerEditor() {
             {/* 预设尺寸 */}
             <div className="flex gap-2 flex-wrap">
               {presets.map((preset) => (
-                <button
+                <Button
                   key={preset.label}
+                  variant="secondary"
+                  size="sm"
                   onClick={() => applyPreset(preset)}
-                  className="px-2 py-1 text-xs bg-white border border-gray-300 rounded hover:bg-gray-100"
+                  className="!h-7 !px-2 !text-xs"
                 >
                   {preset.label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -624,56 +626,119 @@ export function CornerEditor() {
 
       {/* 操作按钮 */}
       <div className="flex gap-3 flex-wrap justify-center">
-        <button
+        <Button
+          variant="secondary"
           onClick={goBack}
           disabled={isLoading}
-          className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+          leftIcon={
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+          }
         >
           返回
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="secondary"
           onClick={handleReset}
           disabled={isLoading}
-          className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+          leftIcon={
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+          }
         >
           重置
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="success"
           onClick={handleAutoDetect}
           disabled={isLoading}
-          className="px-4 py-2 rounded-lg border border-green-300 text-green-600 hover:bg-green-50 disabled:opacity-50 flex items-center gap-1"
+          leftIcon={
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+              />
+            </svg>
+          }
         >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
-            />
-          </svg>
           智能识别
-        </button>
+        </Button>
         {images.length > 1 && (
-          <button
+          <Button
+            variant="danger"
             onClick={handleRemove}
             disabled={isLoading}
-            className="px-4 py-2 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-50"
+            leftIcon={
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                />
+              </svg>
+            }
           >
             删除
-          </button>
+          </Button>
         )}
-        <button
+        <Button
+          variant="primary"
+          size="lg"
           onClick={handleConfirm}
           disabled={isLoading || !currentImage.corners}
-          className="px-6 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50"
+          rightIcon={
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          }
         >
           {currentIndex < images.length - 1 ? "下一张" : "确认裁剪"}
-        </button>
+        </Button>
       </div>
     </div>
   );

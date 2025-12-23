@@ -5,6 +5,7 @@
 
 import { ensureOpenCV } from "./ensureOpenCV";
 import type { Corners, Point } from "./detectEdges";
+import { transformLogger as log } from "../utils/logger";
 
 /**
  * 计算两点之间的欧几里得距离
@@ -60,8 +61,8 @@ export async function applyPerspectiveTransform(
       ? imageSource.height
       : imageSource.naturalHeight || imageSource.height;
 
-  console.log(`[PerspectiveTransform] 原始图片尺寸: ${srcWidth}x${srcHeight}`);
-  console.log("[PerspectiveTransform] srcCorners:", JSON.stringify(srcCorners));
+  log.debug(`原始图片尺寸: ${srcWidth}x${srcHeight}`);
+  log.debug("srcCorners:", JSON.stringify(srcCorners));
 
   const { cv } = await ensureOpenCV();
 
@@ -72,16 +73,14 @@ export async function applyPerspectiveTransform(
     width = size.width;
     height = size.height;
   } catch (err) {
-    console.error("[PerspectiveTransform] 计算尺寸失败:", err);
+    log.error("计算尺寸失败:", err);
     throw err;
   }
 
   const sizeRatio = (((width * height) / (srcWidth * srcHeight)) * 100).toFixed(
     1,
   );
-  console.log(
-    `[PerspectiveTransform] 输出尺寸: ${width}x${height} (${sizeRatio}% 原图面积)`,
-  );
+  log.debug(`输出尺寸: ${width}x${height} (${sizeRatio}% 原图面积)`);
 
   // 临时变量，用于最后释放内存
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -131,7 +130,7 @@ export async function applyPerspectiveTransform(
     canvas.height = height;
     cv.imshow(canvas, dst);
 
-    console.log("[PerspectiveTransform] 处理完成");
+    log.debug("处理完成");
     return canvas.toDataURL("image/png");
   } finally {
     // 释放内存

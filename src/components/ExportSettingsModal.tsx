@@ -9,6 +9,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAppStore, PAPER_SIZES, type PaperSize } from "@/lib/store";
 import { estimatePdfSize, formatFileSize } from "@/lib/utils/exportPdf";
+import { Button, IconButton } from "./ui";
 
 interface ExportSettingsModalProps {
   // 用于计算预估大小的图片 URL 列表
@@ -103,11 +104,14 @@ export function ExportSettingsModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
         {/* 头部 */}
-        <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-800">导出设置</h2>
-          <button
+        <div className="px-6 py-4 bg-[var(--background-secondary)] border-b border-[var(--border-color)] flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-[var(--foreground)]">
+            导出设置
+          </h2>
+          <IconButton
+            variant="ghost"
+            size="sm"
             onClick={handleClose}
-            className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
             aria-label="关闭"
           >
             <svg
@@ -123,32 +127,29 @@ export function ExportSettingsModal({
                 d="M6 18L18 6M6 6l12 12"
               />
             </svg>
-          </button>
+          </IconButton>
         </div>
 
         {/* 内容区 */}
         <div className="px-6 py-5 space-y-6">
           {/* 纸张尺寸 */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
               纸张尺寸
             </label>
             <div className="grid grid-cols-5 gap-2">
               {(Object.keys(PAPER_SIZES) as PaperSize[]).map((size) => (
-                <button
+                <Button
                   key={size}
+                  variant={
+                    exportSettings.paperSize === size ? "primary" : "secondary"
+                  }
+                  size="sm"
                   onClick={() => handlePaperSizeChange(size)}
-                  className={`
-                    px-3 py-2 rounded-lg text-sm font-medium transition-colors
-                    ${
-                      exportSettings.paperSize === size
-                        ? "bg-blue-500 text-white"
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    }
-                  `}
+                  className="!px-2"
                 >
                   {PAPER_SIZES[size].label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -207,20 +208,33 @@ export function ExportSettingsModal({
         </div>
 
         {/* 底部按钮 */}
-        <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex gap-3">
-          <button
-            onClick={handleClose}
-            className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100 font-medium transition-colors"
-          >
+        <div className="px-6 py-4 bg-[var(--background-secondary)] border-t border-[var(--border-color)] flex gap-3">
+          <Button variant="secondary" onClick={handleClose} fullWidth>
             取消
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
             onClick={handleConfirm}
             disabled={isEstimating}
-            className="flex-1 px-4 py-2.5 rounded-lg bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 font-medium transition-colors"
+            fullWidth
+            rightIcon={
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                />
+              </svg>
+            }
           >
             确认导出
-          </button>
+          </Button>
         </div>
       </div>
     </div>

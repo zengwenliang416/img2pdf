@@ -8,6 +8,8 @@
  * 3. 给 script 加 id 防止重复插入
  */
 
+import { opencvLogger as log } from "../utils/logger";
+
 // OpenCV 模块类型（动态加载，使用 any 避免编译时类型检查）
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type OpenCVModule = any;
@@ -49,23 +51,23 @@ export function ensureOpenCV(): Promise<OpenCVReady> {
 
   // 如果已经加载完成，直接返回包装对象
   if (isOpenCVReady()) {
-    console.log("[OpenCV] 已就绪，直接返回");
+    log.debug("已就绪，直接返回");
     return Promise.resolve({ cv: window.cv });
   }
 
   // 如果正在加载，返回存储在 window 上的 Promise（避免 HMR 重置）
   if (window.__opencvReadyPromise) {
-    console.log("[OpenCV] 复用已有加载 Promise");
+    log.debug("复用已有加载 Promise");
     return window.__opencvReadyPromise;
   }
 
-  console.log("[OpenCV] 开始新加载流程...");
+  log.debug("开始新加载流程...");
 
   // 创建新的加载 Promise
   window.__opencvReadyPromise = new Promise<OpenCVReady>((resolve, reject) => {
     // 设置超时
     const timeout = setTimeout(() => {
-      console.error("[OpenCV] 加载超时");
+      log.error("加载超时");
       window.__opencvReadyPromise = undefined;
       reject(new Error(`OpenCV 加载超时（${LOAD_TIMEOUT / 1000}秒）`));
     }, LOAD_TIMEOUT);
@@ -74,10 +76,10 @@ export function ensureOpenCV(): Promise<OpenCVReady> {
     const poll = () => {
       if (window.cv?.Mat) {
         clearTimeout(timeout);
-        console.log("[OpenCV] cv 对象已就绪");
+        log.debug("cv 对象已就绪");
         // 检查是否有 then 方法（可能导致 thenable 同化）
         if (typeof (window.cv as { then?: unknown }).then === "function") {
-          console.warn("[OpenCV] 检测到 cv.then，使用包装对象避免同化");
+          log.warn("检测到 cv.then，使用包装对象避免同化");
         }
         // 返回包装对象，避免 thenable 同化！
         resolve({ cv: window.cv });
@@ -92,7 +94,7 @@ export function ensureOpenCV(): Promise<OpenCVReady> {
       window.Module = {
         ...window.Module,
         onRuntimeInitialized: () => {
-          console.log("[OpenCV] onRuntimeInitialized 触发");
+          log.debug("onRuntimeInitialized 触发");
           // 立即开始轮询
           setTimeout(poll, 0);
         },
@@ -107,14 +109,14 @@ export function ensureOpenCV(): Promise<OpenCVReady> {
       script.onerror = () => {
         clearTimeout(timeout);
         window.__opencvReadyPromise = undefined;
-        console.error("[OpenCV] 脚本加载失败");
+        log.error("脚本加载失败");
         reject(new Error("OpenCV.js 加载失败，请检查文件是否存在"));
       };
 
       document.head.appendChild(script);
-      console.log("[OpenCV] script 标签已添加");
+      log.debug("script 标签已添加");
     } else {
-      console.log("[OpenCV] script 标签已存在，开始轮询");
+      log.debug("script 标签已存在，开始轮询");
       // script 已存在，直接开始轮询
       poll();
     }

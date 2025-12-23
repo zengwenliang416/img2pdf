@@ -9,6 +9,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { generateThumbnailFromImage } from "@/lib/utils/thumbnail";
+import { uploadLogger as log } from "@/lib/utils/logger";
 
 // 支持的图片类型
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
@@ -98,7 +99,7 @@ export function ImageUpload() {
 
       if (validFiles.length < fileArray.length) {
         const skipped = fileArray.length - validFiles.length;
-        console.warn(`跳过了 ${skipped} 个无效文件`);
+        log.warn(`跳过了 ${skipped} 个无效文件`);
       }
 
       setLoading(true, `正在加载 ${validFiles.length} 张图片...`);
@@ -179,59 +180,137 @@ export function ImageUpload() {
   );
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] p-4">
+    <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 animate-fade-in">
+      {/* 上传卡片 */}
       <div
         onClick={handleClick}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         className={`
-          w-full max-w-md aspect-[3/4] rounded-2xl border-2 border-dashed
-          flex flex-col items-center justify-center gap-4 cursor-pointer
-          transition-all duration-200
+          relative w-full max-w-md aspect-[3/4] rounded-2xl
+          flex flex-col items-center justify-center gap-5 cursor-pointer
+          transition-all duration-300 ease-out
+          bg-[var(--card-bg)] border-2 border-dashed
           ${
             isDragging
-              ? "border-blue-500 bg-blue-50 scale-105"
-              : "border-gray-300 bg-gray-50 hover:border-blue-400 hover:bg-blue-50/50"
+              ? "border-[var(--primary)] bg-[var(--primary-50)] scale-[1.02] shadow-[var(--shadow-primary)]"
+              : "border-[var(--neutral-300)] hover:border-[var(--primary-400)] hover:shadow-[var(--shadow-lg)]"
           }
-          ${isLoading ? "pointer-events-none opacity-50" : ""}
+          ${isLoading ? "pointer-events-none opacity-60" : ""}
         `}
+        style={{
+          boxShadow: isDragging ? undefined : "var(--shadow-md)",
+        }}
       >
-        {isLoading ? (
-          <>
-            <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-gray-600">正在加载...</p>
-          </>
-        ) : (
-          <>
-            <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center">
-              <svg
-                className="w-8 h-8 text-blue-500"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+        {/* 背景装饰 */}
+        <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+          <div
+            className={`
+              absolute -top-20 -right-20 w-40 h-40 rounded-full
+              bg-[var(--primary-100)] opacity-50 blur-3xl
+              transition-opacity duration-500
+              ${isDragging ? "opacity-80" : "opacity-30"}
+            `}
+          />
+          <div
+            className={`
+              absolute -bottom-20 -left-20 w-40 h-40 rounded-full
+              bg-[var(--primary-200)] opacity-50 blur-3xl
+              transition-opacity duration-500
+              ${isDragging ? "opacity-60" : "opacity-20"}
+            `}
+          />
+        </div>
+
+        {/* 内容区域 */}
+        <div className="relative z-10 flex flex-col items-center gap-5">
+          {isLoading ? (
+            <>
+              <div className="relative">
+                <div className="w-16 h-16 border-4 border-[var(--primary-200)] rounded-full" />
+                <div className="absolute inset-0 w-16 h-16 border-4 border-[var(--primary)] border-t-transparent rounded-full animate-spin" />
+              </div>
+              <p className="text-[var(--neutral-600)] font-medium">
+                正在加载图片...
+              </p>
+            </>
+          ) : (
+            <>
+              {/* 图标容器 */}
+              <div
+                className={`
+                  relative w-20 h-20 rounded-2xl
+                  bg-gradient-to-br from-[var(--primary-100)] to-[var(--primary-200)]
+                  flex items-center justify-center
+                  transition-transform duration-300
+                  ${isDragging ? "scale-110 rotate-3" : ""}
+                `}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                />
-              </svg>
-            </div>
-            <div className="text-center">
-              <p className="text-lg font-medium text-gray-700">
-                点击或拖拽上传图片
-              </p>
-              <p className="text-sm text-gray-500 mt-1">
-                支持 JPG、PNG、WebP 格式，可多选
-              </p>
-              <p className="text-xs text-gray-400 mt-1">
-                最多 {MAX_FILES} 张，每张不超过 20MB
-              </p>
-            </div>
-          </>
-        )}
+                <svg
+                  className={`
+                    w-10 h-10 text-[var(--primary)]
+                    transition-transform duration-300
+                    ${isDragging ? "scale-110" : ""}
+                  `}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                  />
+                </svg>
+                {/* 上传箭头指示 */}
+                <div
+                  className={`
+                    absolute -top-2 -right-2 w-8 h-8 rounded-full
+                    bg-[var(--primary)] text-white
+                    flex items-center justify-center
+                    shadow-[var(--shadow-md)]
+                    transition-transform duration-300
+                    ${isDragging ? "scale-125 -translate-y-1" : ""}
+                  `}
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 4v16m0-16l-4 4m4-4l4 4"
+                    />
+                  </svg>
+                </div>
+              </div>
+
+              {/* 文字说明 */}
+              <div className="text-center space-y-2">
+                <p className="text-lg font-semibold text-[var(--foreground)]">
+                  {isDragging ? "松开以上传图片" : "点击或拖拽上传图片"}
+                </p>
+                <p className="text-sm text-[var(--neutral-500)]">
+                  支持 JPG、PNG、WebP 格式，可多选
+                </p>
+                <div className="flex items-center justify-center gap-2 text-xs text-[var(--neutral-400)]">
+                  <span className="px-2 py-0.5 rounded-full bg-[var(--neutral-100)]">
+                    最多 {MAX_FILES} 张
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-[var(--neutral-100)]">
+                    每张 ≤ 20MB
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       <input
@@ -243,9 +322,23 @@ export function ImageUpload() {
         className="hidden"
       />
 
-      <p className="mt-6 text-sm text-gray-500 text-center">
-        所有处理均在本地完成，您的图片不会上传到服务器
-      </p>
+      {/* 隐私提示 */}
+      <div className="mt-8 flex items-center gap-2 text-sm text-[var(--neutral-500)]">
+        <svg
+          className="w-4 h-4 text-[var(--success)]"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+          />
+        </svg>
+        <span>所有处理均在本地完成，您的图片不会上传到服务器</span>
+      </div>
     </div>
   );
 }
