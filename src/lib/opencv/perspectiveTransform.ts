@@ -1,11 +1,14 @@
 /**
  * 透视变换模块
  * 将四边形区域矫正为矩形
+ *
+ * 性能优化：使用 ObjectURL 替代 DataURL 减少内存占用
  */
 
 import { ensureOpenCV } from "./ensureOpenCV";
 import type { Corners, Point } from "./detectEdges";
 import { transformLogger as log } from "../utils/logger";
+import { canvasToObjectUrl } from "../utils/imageUtils";
 
 /**
  * 计算两点之间的欧几里得距离
@@ -124,14 +127,14 @@ export async function applyPerspectiveTransform(
       new cv.Scalar(255, 255, 255, 255),
     );
 
-    // 6. 输出到 Canvas 并获取 Data URL
+    // 6. 输出到 Canvas 并获取 ObjectURL（内存效率更高）
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
     cv.imshow(canvas, dst);
 
     log.debug("处理完成");
-    return canvas.toDataURL("image/png");
+    return canvasToObjectUrl(canvas, "image/png");
   } finally {
     // 释放内存
     for (const mat of mats) {

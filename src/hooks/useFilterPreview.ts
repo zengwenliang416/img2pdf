@@ -2,12 +2,18 @@
  * 滤镜预览逻辑 Hook
  * 处理图片加载、滤镜应用和预览生成
  * 包含滤镜结果缓存机制，避免重复计算
+ *
+ * 性能优化：
+ * - 使用 forPreview 模式降采样大图（减少处理时间）
+ * - 使用 ObjectURL 替代 DataURL（减少内存）
+ * - 缓存机制避免重复计算
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import { applyFilter, AVAILABLE_FILTERS, type FilterType } from "@/lib/opencv";
 import { filterPanelLogger as log } from "@/lib/utils/logger";
+import { revokeObjectUrl } from "@/lib/utils/imageUtils";
 
 // 滤镜缓存：key 格式为 `${imgId}_${filterType}`
 const filterCache = new Map<string, string>();
@@ -24,7 +30,7 @@ function getCacheKey(imgId: string, filter: FilterType): string {
 }
 
 /**
- * 清理指定图片的缓存
+ * 清理指定图片的缓存（同时释放 ObjectURL）
  */
 function clearImageCache(imgId: string): void {
   const keysToDelete: string[] = [];
@@ -33,7 +39,12 @@ function clearImageCache(imgId: string): void {
       keysToDelete.push(key);
     }
   }
-  keysToDelete.forEach((key) => filterCache.delete(key));
+  keysToDelete.forEach((key) => {
+    // 释放 ObjectURL 资源
+    const url = filterCache.get(key);
+    revokeObjectUrl(url);
+    filterCache.delete(key);
+  });
   if (keysToDelete.length > 0) {
     log.debug(`清理图片 ${imgId} 的 ${keysToDelete.length} 条缓存`);
   }
@@ -110,6 +121,8 @@ export function useFilterPreview(
       clearImageCache(imgId);
     } else {
       const size = filterCache.size;
+      // 释放所有 ObjectURL
+      filterCache.forEach((url) => revokeObjectUrl(url));
       filterCache.clear();
       cacheHits = 0;
       cacheMisses = 0;
@@ -155,7 +168,8 @@ export function useFilterPreview(
 
       log.debug(`应用滤镜 ${filter}，图片尺寸: ${imgWidth}x${imgHeight}`);
 
-      const result = await applyFilter(canvas, filter);
+      // 使用 forPreview 模式对大图进行降采样，提高处理速度
+      const result = await applyFilter(canvas, filter, { forPreview: true });
 
       // 存入缓存
       if (enableCache && result) {
@@ -268,6 +282,7 @@ export function useFilterPreview(
 
   /**
    * 当前图片变化时，重新生成滤镜预览缩略图
+   * 注意：会释放旧的 ObjectURLs 避免内存泄漏
    */
   useEffect(() => {
     if (!currentImage?.cropped) return;
@@ -296,10 +311,22 @@ export function useFilterPreview(
         previews[filter] = await applyFilter(thumbCanvas, filter);
       }
 
-      setFilterPreviews(previews);
+      // 释放旧的滤镜预览 ObjectURLs 避免内存泄漏
+      setFilterPreviews((prev) => {
+        Object.values(prev).forEach(revokeObjectUrl);
+        return previews;
+      });
     };
 
     generateFilterPreviews();
+
+    // Cleanup：组件卸载时释放所有滤镜预览
+    return () => {
+      setFilterPreviews((prev) => {
+        Object.values(prev).forEach(revokeObjectUrl);
+        return {} as Record<FilterType, string>;
+      });
+    };
   }, [currentImage?.id, currentImage?.cropped]);
 
   return {

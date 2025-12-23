@@ -2,9 +2,19 @@
  * 图像滤镜模块
  * 提供原图、灰度、黑白、增强等滤镜效果
  * 使用纯 Canvas API 实现，避免 OpenCV 阻塞主线程
+ *
+ * 性能优化：
+ * - 支持预览分辨率降采样（forPreview 模式）
+ * - 使用 canvasToObjectUrl 替代 toDataURL 减少内存
  */
 
 import { filterLogger as log } from "../utils/logger";
+import {
+  canvasToObjectUrl,
+  createDownscaledCanvas,
+  needsDownscaleForPreview,
+  PREVIEW_CONFIG,
+} from "../utils/imageUtils";
 
 /**
  * 滤镜类型
@@ -30,6 +40,8 @@ export interface FilterConfig {
   shadowBlurRadius?: number;
   // 去阴影滤镜的对比度增强系数
   shadowContrast?: number;
+  // 预览模式（降采样以提高性能）
+  forPreview?: boolean;
 }
 
 const DEFAULT_CONFIG: Required<FilterConfig> = {
@@ -38,6 +50,7 @@ const DEFAULT_CONFIG: Required<FilterConfig> = {
   enhancedBrightness: 20,
   shadowBlurRadius: 50,
   shadowContrast: 1.5,
+  forPreview: false,
 };
 
 /**
@@ -45,7 +58,7 @@ const DEFAULT_CONFIG: Required<FilterConfig> = {
  * @param imageSource 图像源
  * @param filterType 滤镜类型
  * @param config 滤镜配置
- * @returns 处理后的图像 Data URL
+ * @returns 处理后的图像 URL（ObjectURL 或 DataURL）
  */
 export async function applyFilter(
   imageSource: HTMLCanvasElement | HTMLImageElement,
@@ -62,27 +75,47 @@ export async function applyFilter(
   const cfg = { ...DEFAULT_CONFIG, ...config };
 
   // 获取图像尺寸
-  const width =
+  const srcWidth =
     imageSource instanceof HTMLCanvasElement
       ? imageSource.width
       : imageSource.naturalWidth || imageSource.width;
-  const height =
+  const srcHeight =
     imageSource instanceof HTMLCanvasElement
       ? imageSource.height
       : imageSource.naturalHeight || imageSource.height;
 
-  // 创建工作 Canvas
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
+  // 预览模式：大图降采样以提高性能
+  let workCanvas: HTMLCanvasElement;
+  let width: number;
+  let height: number;
 
-  if (!ctx) {
-    throw new Error("无法创建 Canvas 上下文");
+  if (
+    cfg.forPreview &&
+    needsDownscaleForPreview(srcWidth, srcHeight, PREVIEW_CONFIG.maxPreviewSize)
+  ) {
+    const { canvas: scaled } = await createDownscaledCanvas(
+      imageSource,
+      PREVIEW_CONFIG.maxPreviewSize,
+    );
+    workCanvas = scaled;
+    width = scaled.width;
+    height = scaled.height;
+    log.debug(`预览模式：${srcWidth}x${srcHeight} → ${width}x${height}`);
+  } else {
+    // 创建工作 Canvas
+    workCanvas = document.createElement("canvas");
+    workCanvas.width = srcWidth;
+    workCanvas.height = srcHeight;
+    width = srcWidth;
+    height = srcHeight;
+
+    const ctx = workCanvas.getContext("2d");
+    if (!ctx) throw new Error("无法创建 Canvas 上下文");
+    ctx.drawImage(imageSource, 0, 0);
   }
 
-  // 绘制原图（使用 3 参数形式，以原始尺寸绘制）
-  ctx.drawImage(imageSource, 0, 0);
+  const ctx = workCanvas.getContext("2d");
+  if (!ctx) throw new Error("无法创建 Canvas 上下文");
 
   // 根据滤镜类型处理
   switch (filterType) {
@@ -115,17 +148,19 @@ export async function applyFilter(
   }
 
   log.debug("滤镜处理完成:", filterType);
-  return canvas.toDataURL("image/png");
+
+  // 使用 ObjectURL 减少内存占用（调用者需负责 revoke）
+  return canvasToObjectUrl(workCanvas, "image/png");
 }
 
 /**
- * 获取图像的 Data URL
+ * 获取图像的 ObjectURL（减少内存占用）
  */
-function getImageDataUrl(
+async function getImageDataUrl(
   imageSource: HTMLCanvasElement | HTMLImageElement,
-): string {
+): Promise<string> {
   if (imageSource instanceof HTMLCanvasElement) {
-    return imageSource.toDataURL("image/png");
+    return canvasToObjectUrl(imageSource, "image/png");
   }
 
   const canvas = document.createElement("canvas");
@@ -134,7 +169,7 @@ function getImageDataUrl(
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("无法创建 Canvas 上下文");
   ctx.drawImage(imageSource, 0, 0);
-  return canvas.toDataURL("image/png");
+  return canvasToObjectUrl(canvas, "image/png");
 }
 
 /**
